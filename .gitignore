@@ -1,0 +1,40 @@
+# ===== 비밀값 — 절대 커밋 금지 =====
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+credentials.json
+*token*.txt
+
+# ===== Node / Next.js =====
+node_modules/
+.next/
+out/
+build/
+npm-debug.log*
+yarn-error.log*
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# ===== SQLite (데이터는 도커 volume에) =====
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# ===== 도커 =====
+docker-compose.override.yml
+
+# ===== OS / 에디터 =====
+.DS_Store
+*~
+.vscode/
+.idea/
