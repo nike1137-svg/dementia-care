@@ -38,3 +38,6 @@ docker-compose.override.yml
 *~
 .vscode/
 .idea/
+
+# ===== 로컬 에이전트 설정 =====
+.claude/settings.local.json
