@@ -1,142 +1,83 @@
-.page {
-  --background: #fafafa;
-  --foreground: #fff;
+/* app/page.module.css — 홈 화면. 모든 수치·색은 tokens.css 변수만 참조. */
 
-  --text-primary: #000;
-  --text-secondary: #666;
-
-  --button-primary-hover: #383838;
-  --button-secondary-hover: #f2f2f2;
-  --button-secondary-border: #ebebeb;
-
+.screen {
+  min-height: 100dvh;
   display: flex;
-  flex: 1;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-geist-sans);
-  background-color: var(--background);
+  padding: var(--page-padding);
+  text-align: center;
 }
 
-.main {
-  display: flex;
-  flex: 1;
-  width: 100%;
-  max-width: 800px;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  background-color: var(--foreground);
-  padding: 120px 60px;
-}
-
-.intro {
+/* 성공 화면: 세로 스택, 스크롤 없이 한 화면 */
+.home {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  gap: 24px;
-}
-
-.intro h1 {
-  max-width: 320px;
-  font-size: 40px;
-  font-weight: 600;
-  line-height: 48px;
-  letter-spacing: -2.4px;
-  text-wrap: balance;
-  color: var(--text-primary);
-}
-
-.intro p {
-  max-width: 440px;
-  font-size: 18px;
-  line-height: 32px;
-  text-wrap: balance;
-  color: var(--text-secondary);
-}
-
-.intro a {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.ctas {
-  display: flex;
-  flex-direction: row;
-  width: 100%;
-  max-width: 440px;
-  gap: 16px;
-  font-size: 14px;
-}
-
-.ctas a {
-  display: flex;
-  justify-content: center;
   align-items: center;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 128px;
-  border: 1px solid transparent;
-  transition: 0.2s;
+  gap: var(--stack-gap);
+  width: 100%;
+  max-width: var(--content-max);
+}
+
+.title {
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-strong);
+  color: var(--color-fg);
+}
+
+.streakBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-buttons);
+}
+
+.streakLabel {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-fg-muted);
+}
+
+.streakNumber {
+  font-size: var(--font-size-streak);
+  font-weight: var(--font-weight-strong);
+  color: var(--color-fg);
+  line-height: 1;
+}
+
+/* 상태 텍스트 (로딩 / 에러 공통) */
+.stateBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--stack-gap);
+  width: 100%;
+  max-width: var(--content-max);
+}
+
+.stateText {
+  font-size: var(--font-size-question);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-fg);
+  line-height: var(--line-height);
+}
+
+/* 단추 — 어두운 배경 + 흰 글자(명암으로 강조) + 선 테두리(색약 대비).
+ * 시작 단추와 다시하기 단추가 공유한다. */
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: var(--content-max);
+  min-height: var(--touch-min);
+  padding: var(--gap-buttons);
+  font-family: var(--font-family);
+  font-size: var(--font-size-question);
+  font-weight: var(--font-weight-strong);
+  color: var(--color-invert-fg);
+  background: var(--color-invert-bg);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius);
   cursor: pointer;
-  width: fit-content;
-  font-weight: 500;
-}
-
-a.primary {
-  background: var(--text-primary);
-  color: var(--background);
-  gap: 8px;
-}
-
-a.secondary {
-  border-color: var(--button-secondary-border);
-}
-
-/* Enable hover only on non-touch devices */
-@media (hover: hover) and (pointer: fine) {
-  a.primary:hover {
-    background: var(--button-primary-hover);
-    border-color: transparent;
-  }
-
-  a.secondary:hover {
-    background: var(--button-secondary-hover);
-    border-color: transparent;
-  }
-}
-
-@media (max-width: 600px) {
-  .main {
-    padding: 48px 24px;
-  }
-
-  .intro {
-    gap: 16px;
-  }
-
-  .intro h1 {
-    font-size: 32px;
-    line-height: 40px;
-    letter-spacing: -1.92px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert();
-  }
-
-  .page {
-    --background: #000;
-    --foreground: #000;
-
-    --text-primary: #ededed;
-    --text-secondary: #999;
-
-    --button-primary-hover: #ccc;
-    --button-secondary-hover: #1a1a1a;
-    --button-secondary-border: #1a1a1a;
-  }
 }

@@ -1,0 +1,53 @@
+/* app/tokens.css
+ *
+ * PRD §4.1 UI 요구사항을 CSS 변수로 못박는 단일 원천.
+ * 화면 코드(page.tsx / *.module.css)는 이 변수만 참조한다.
+ * → 나중에 "규격을 지켰나"를 이 파일 하나로 검증할 수 있어야 한다.
+ *
+ * 원칙: 색은 최소한(검정 계열 글자 + 흰 배경), 애니메이션/트랜지션 정의 없음.
+ */
+
+:root {
+  /* 단일 라이트 테마 — 7:1 대비(AAA)를 결정적으로 보장 (PRD §4.1) */
+  color-scheme: light;
+
+  /* ── 색 (최소한. 검정 계열 글자 + 흰 배경) ────────────────── */
+  --color-bg: #ffffff;          /* 배경 */
+  --color-fg: #1a1a1a;          /* 본문 글자 — 흰 배경 대비 약 17:1 (AAA) */
+  --color-fg-muted: #454545;    /* 보조 글자 — 흰 배경 대비 약 9:1 (AAA) */
+  --color-border: #1a1a1a;      /* 테두리 — 색이 아닌 '선'으로 구분 (색약 대비) */
+  --color-invert-bg: #1a1a1a;   /* 강조 단추 배경(어두움) — 색이 아닌 '명암'으로 강조 */
+  --color-invert-fg: #ffffff;   /* 강조 단추 글자 — 대비 약 17:1 (AAA) */
+  --color-focus: #1a1a1a;       /* 포커스 링 — 색이 아닌 '굵기'로 표시 */
+
+  /* ── 글자 크기 (PRD §4.1: 기본 ≥20px, 문항 ≥24px) ───────────
+   * px 고정은 사용자 글씨 크기 설정을 무시한다. max()로 PRD §4.1 하한을
+   * 지키면서 사용자 확대는 따라간다. (px=하한, rem=사용자 설정 추종) */
+  --font-size-base: max(20px, 1.25rem);     /* 기본 하한 */
+  --font-size-question: max(24px, 1.5rem);  /* 문항·단추 하한 */
+  --font-size-heading: max(32px, 2rem);     /* 화면 제목 */
+  --font-size-streak: max(56px, 3.5rem);    /* 연속 참여일 숫자 (한눈에 보이게) */
+
+  /* ── 글자 굵기 (PRD §4.1: ≥500) ──────────────────────── */
+  --font-weight-normal: 500;    /* 얇은 폰트는 노안에 흐림 → 하한 500 */
+  --font-weight-strong: 700;
+
+  --line-height: 1.5;
+
+  /* ── 폰트 (한국어 시스템 폰트. 외부 다운로드/새 패키지 없음) ── */
+  --font-family: "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕",
+    "Noto Sans KR", "Nanum Gothic", system-ui, sans-serif;
+
+  /* ── 터치 / 간격 (PRD §4.1: 터치 ≥60px, 버튼 간격 ≥24px) ── */
+  --touch-min: 60px;            /* 터치 영역 최소 한 변 */
+  --gap-buttons: 24px;          /* 인접 단추 사이 최소 간격 (손 떨림 오터치 방지) */
+  --page-padding: 24px;         /* 화면 가장자리 여백 */
+  --stack-gap: 32px;            /* 세로 블록 사이 간격 */
+
+  /* ── 모양 / 치수 ─────────────────────────────────────── */
+  --content-max: 30rem;         /* 본문 최대 폭 (한 손 화면 기준) */
+  --radius: 12px;               /* 단추/카드 모서리 */
+  --border-width: 2px;          /* 테두리 두께 — 선으로 구분 */
+  --focus-width: 4px;           /* 포커스 링 두께 (색이 아닌 굵기) */
+  --focus-offset: 2px;          /* 포커스 링 간격 */
+}
