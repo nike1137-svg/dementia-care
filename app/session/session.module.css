@@ -32,6 +32,14 @@
   line-height: var(--line-height);
 }
 
+/* 판정 응답 message (api-spec §4). 서버가 준 격려/재시도 문구를 그대로 표시 */
+.feedback {
+  font-size: var(--font-size-question);
+  font-weight: var(--font-weight-strong);
+  color: var(--color-fg);
+  line-height: var(--line-height);
+}
+
 /* 선택지: 세로로 쌓고 사이 간격 24px(손 떨림 오터치 방지) */
 .choices {
   display: flex;
