@@ -1,0 +1,6 @@
+{
+  "correct": false,
+  "attempts": 1,
+  "message": "비슷해요, 하나만 더 생각해볼까요?",
+  "next_action": "retry"
+}

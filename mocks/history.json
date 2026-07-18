@@ -1,0 +1,12 @@
+{
+  "streak_days": 5,
+  "days": [
+    { "date": "2026-07-12", "completed": true,  "domain": "지남력" },
+    { "date": "2026-07-13", "completed": true,  "domain": "지남력" },
+    { "date": "2026-07-14", "completed": false, "domain": null },
+    { "date": "2026-07-15", "completed": true,  "domain": "지남력" },
+    { "date": "2026-07-16", "completed": true,  "domain": "지남력" },
+    { "date": "2026-07-17", "completed": true,  "domain": "지남력" },
+    { "date": "2026-07-18", "completed": false, "domain": null }
+  ]
+}
