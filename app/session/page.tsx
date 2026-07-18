@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./session.module.css";
+import { useFetch } from "../lib/useFetch";
+import { AsyncBoundary } from "../components/AsyncBoundary";
 
 // Phase 3 교체: 이 URL만 "/api/py/session/today"로 바꾸면 실제 백엔드로 전환된다 (api-spec §9).
 const SESSION_URL = "/mocks/session-today.json";
@@ -64,34 +66,24 @@ async function submitMockAnswer(
   return (await res.json()) as AnswerResponse;
 }
 
-type Status = "loading" | "success" | "error";
 type Feedback = { message: string; nextAction: "retry" | "proceed" };
 
 export default function SessionPage() {
   const router = useRouter();
-  const [status, setStatus] = useState<Status>("loading");
-  const [session, setSession] = useState<Session | null>(null);
+  const { status, data: session, retry, reportError } = useFetch(loadSession);
   const [stepIndex, setStepIndex] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const run = useCallback(() => {
-    setStatus("loading");
-    loadSession()
-      .then((s) => {
-        setSession(s);
-        setStepIndex(0);
-        setAttempts(0);
-        setFeedback(null);
-        setStatus("success");
-      })
-      .catch(() => setStatus("error"));
-  }, []);
-
+  // 새 세션이 로드되면(초기·재시도) 진행 상태 초기화.
   useEffect(() => {
-    run();
-  }, [run]);
+    if (session) {
+      setStepIndex(0);
+      setAttempts(0);
+      setFeedback(null);
+    }
+  }, [session]);
 
   // 다음 단계로. 마지막(mission) 다음엔 /done. 판정 상태 초기화.
   // ★ router.push는 상태 업데이터 밖에서 호출한다 (업데이터 안에서 부르면
@@ -116,86 +108,60 @@ export default function SessionPage() {
         .then((resp) => {
           setFeedback({ message: resp.message, nextAction: resp.next_action });
         })
-        .catch(() => setStatus("error"))
+        .catch(() => reportError())
         .finally(() => setSubmitting(false));
     },
-    [attempts],
+    [attempts, reportError],
   );
 
-  // 상태: 로딩
-  if (status === "loading") {
-    return (
-      <main className={styles.screen}>
-        <p className={styles.stateText}>잠시만 기다려 주세요…</p>
-      </main>
-    );
-  }
-
-  // 상태: 에러
-  if (status === "error" || !session) {
-    return (
-      <main className={styles.screen}>
-        <div className={styles.stateBlock}>
-          <p className={styles.stateText}>
-            잠깐 문제가 생겼어요.
-            <br />
-            아래 단추를 눌러 다시 해보세요.
-          </p>
-          <button type="button" className={styles.button} onClick={run}>
-            다시 해보기
-          </button>
-        </div>
-      </main>
-    );
-  }
-
-  // 상태: 성공 — 현재 단계 하나만
   const key = STEP_ORDER[stepIndex];
-  const step = session.steps[key];
+  const step = session?.steps[key];
   const isLast = stepIndex === STEP_ORDER.length - 1;
   const judged = JUDGED.has(key);
   const proceeding = feedback?.nextAction === "proceed";
 
   return (
-    <main className={styles.screen}>
-      <div className={styles.step}>
-        <p className={styles.progress}>
-          {stepIndex + 1} / {STEP_ORDER.length}
-        </p>
+    <AsyncBoundary status={status} onRetry={retry}>
+      {step && (
+        <div className={styles.step}>
+          <p className={styles.progress}>
+            {stepIndex + 1} / {STEP_ORDER.length}
+          </p>
 
-        <h1 className={styles.prompt}>{step.prompt ?? step.text}</h1>
+          <h1 className={styles.prompt}>{step.prompt ?? step.text}</h1>
 
-        {/* 서버 message 그대로 표시 (api-spec §4). 부정적 통보 문구는 쓰지 않는다 (PRD §3.4) */}
-        {feedback && <p className={styles.feedback}>{feedback.message}</p>}
+          {/* 서버 message 그대로 표시 (api-spec §4). 부정적 통보 문구는 쓰지 않는다 (PRD §3.4) */}
+          {feedback && <p className={styles.feedback}>{feedback.message}</p>}
 
-        {proceeding ? (
-          // 판정 결과 proceed → 다음 단추 하나
-          <button type="button" className={styles.button} onClick={advance}>
-            다음
-          </button>
-        ) : step.choices ? (
-          // 선택지 단계. 판정 단계(warmup·main)는 onAnswer, 아니면(mood) 바로 다음.
-          // retry면 이 분기로 다시 와서 선택지가 재활성화된다.
-          <div className={styles.choices}>
-            {step.choices.map((choice) => (
-              <button
-                key={choice}
-                type="button"
-                className={styles.button}
-                disabled={submitting}
-                onClick={judged ? () => onAnswer(key) : advance}
-              >
-                {choice}
-              </button>
-            ))}
-          </div>
-        ) : (
-          // 선택지 없는 단계(recall·mission)
-          <button type="button" className={styles.button} onClick={advance}>
-            {isLast ? "오늘 마치기" : "다음"}
-          </button>
-        )}
-      </div>
-    </main>
+          {proceeding ? (
+            // 판정 결과 proceed → 다음 단추 하나
+            <button type="button" className={styles.button} onClick={advance}>
+              다음
+            </button>
+          ) : step.choices ? (
+            // 선택지 단계. 판정 단계(warmup·main)는 onAnswer, 아니면(mood) 바로 다음.
+            // retry면 이 분기로 다시 와서 선택지가 재활성화된다.
+            <div className={styles.choices}>
+              {step.choices.map((choice) => (
+                <button
+                  key={choice}
+                  type="button"
+                  className={styles.button}
+                  disabled={submitting}
+                  onClick={judged ? () => onAnswer(key) : advance}
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          ) : (
+            // 선택지 없는 단계(recall·mission)
+            <button type="button" className={styles.button} onClick={advance}>
+              {isLast ? "오늘 마치기" : "다음"}
+            </button>
+          )}
+        </div>
+      )}
+    </AsyncBoundary>
   );
 }

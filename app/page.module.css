@@ -1,13 +1,5 @@
-/* app/page.module.css — 홈 화면. 모든 수치·색은 tokens.css 변수만 참조. */
-
-.screen {
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--page-padding);
-  text-align: center;
-}
+/* app/page.module.css — 홈 화면. 모든 수치·색은 tokens.css 변수만 참조.
+ * 화면 틀·로딩·에러 UI는 AsyncBoundary로 공통화됨. */
 
 /* 성공 화면: 세로 스택, 스크롤 없이 한 화면 */
 .home {
@@ -45,25 +37,7 @@
   line-height: 1;
 }
 
-/* 상태 텍스트 (로딩 / 에러 공통) */
-.stateBlock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--stack-gap);
-  width: 100%;
-  max-width: var(--content-max);
-}
-
-.stateText {
-  font-size: var(--font-size-question);
-  font-weight: var(--font-weight-normal);
-  color: var(--color-fg);
-  line-height: var(--line-height);
-}
-
-/* 단추 — 어두운 배경 + 흰 글자(명암으로 강조) + 선 테두리(색약 대비).
- * 시작 단추와 다시하기 단추가 공유한다. */
+/* 시작 단추 — 어두운 배경 + 흰 글자(명암으로 강조) + 선 테두리(색약 대비) */
 .button {
   display: flex;
   align-items: center;
