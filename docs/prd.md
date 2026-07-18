@@ -95,11 +95,14 @@
 
 ### 3.3 난이도 자동 조정
 
-| 단계 | 유형 | 예시(언어) |
+| 단계 | 유형 | 예시 |
 |---|---|---|
-| 1 (하) | 보기 제시형 | "사과, 자동차 중 먹는 건?" |
-| 2 (중) | 단서 제시형 | "ㅅ으로 시작하는 과일은?" |
-| 3 (상) | 자유 회상형 | "과일 이름 5개 말해보세요" |
+| 1 (하) | 2택, 답이 뻔한 보기 | "일주일은 며칠이에요? (7일 / 10일)" |
+| 2 (중) | 4택 + 단서 | "월요일 다음은 무슨 요일이에요? (화·수·목·금)" |
+| 3 (상) | 4택, 단서 없음, 헷갈리는 보기 | "정월대보름에 하는 건? (부럼 깨기·송편 빚기·세배하기·팥죽 먹기)" |
+
+> ★ 어르신은 타이핑을 못 한다(§2.1). **모든 문항은 탭으로만 답한다.** 주관식(타이핑 입력)은 배제한다.
+> ★ **보기 순서는 서버가 섞는다** (세션+문항 기준 결정적 셔플). 위치 학습은 막고, 세션 중에는 순서가 고정된다.
 
 - 3회 연속 성공 → 상승 / 2회 연속 실패 → 하강
 - 별도 평가 화면 없음
@@ -147,13 +150,15 @@ users
   week        INTEGER
 
 questions
-  id          INTEGER PK
-  domain      TEXT         -- 지남력/주의집중/기억력/언어/계산실행/시공간회상
-  level       INTEGER      -- 1~3
-  stage       TEXT         -- warmup/main/recall
-  prompt      TEXT
-  choices     TEXT         -- JSON 배열, 자유회상형은 NULL
-  answer      TEXT         -- ★ 절대 프런트로 내보내지 않음
+  id           INTEGER PK
+  domain       TEXT         -- 지남력/주의집중/기억력/언어/계산실행/시공간회상
+  level        INTEGER      -- 1~3
+  stage        TEXT         -- warmup/main/recall
+  prompt       TEXT
+  choices      TEXT         -- JSON 배열. dynamic 문항은 서버가 choices_rule로 생성 → NULL 가능
+  answer_type  TEXT         -- static / dynamic
+  answer_rule  TEXT         -- dynamic일 때 계산 규칙 (예: weekday, season). static이면 NULL
+  answer       TEXT         -- ★ static일 때만 값. dynamic이면 NULL. 절대 프런트로 내보내지 않음
 
 missions
   id          INTEGER PK
