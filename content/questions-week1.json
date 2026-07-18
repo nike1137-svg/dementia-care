@@ -1,0 +1,258 @@
+{
+  "_comment": "새록이 문항 은행 — 1주차(지남력). 이 파일은 서버(FastAPI)가 읽어 DB에 seed하는 원본이다. answer 필드는 절대 프런트로 내려보내지 않는다.",
+  "version": "1.0",
+  "created": "2026-07-18",
+  "week": 1,
+  "domain": "지남력",
+  "app_name": "새록이",
+  "tone": "친근한 존대 (~이에요/~예요). 명령형 금지. 재촉 금지.",
+
+  "answer_types": {
+    "static": "정답이 고정. answer 필드에 정답 문자열.",
+    "dynamic": "정답이 오늘 날짜에 따라 바뀜. 서버가 answer_rule로 보기와 정답을 생성. DB에 정답을 저장할 수 없음."
+  },
+
+  "levels": {
+    "1": "2택. 답이 뻔한 보기. 실패 경험 방지가 목적.",
+    "2": "4택 + 단서. 기본 난이도.",
+    "3": "4택, 단서 없음, 헷갈리는 보기. 타이핑 없음(어르신 제약)."
+  },
+
+  "common": {
+    "mood": {
+      "prompt": "안녕하세요, 새록이예요. 오늘 기분은 어떠세요?",
+      "choices": ["좋아요", "그저 그래요", "별로예요"],
+      "judged": false,
+      "_note": "첫 방문이 아니면 prompt를 '오늘 기분은 어떠세요?'로 짧게 해도 된다. 판정하지 않는다."
+    },
+
+    "warmup": {
+      "_note": "매일 동일한 로직. 전부 dynamic — 서버가 오늘 날짜로 보기와 정답을 만든다.",
+      "1": {
+        "id": 1111,
+        "prompt": "오늘은 평일이에요, 주말이에요?",
+        "answer_type": "dynamic",
+        "answer_rule": "weekday_type",
+        "choices_rule": "fixed:['평일','주말']"
+      },
+      "2": {
+        "id": 1112,
+        "prompt": "오늘은 무슨 요일이에요?",
+        "answer_type": "dynamic",
+        "answer_rule": "weekday",
+        "choices_rule": "weekday_4 (정답 + 인접 요일 3개, 순서 섞기)"
+      },
+      "3": {
+        "id": 1113,
+        "prompt": "오늘은 몇 월 며칠이에요?",
+        "answer_type": "dynamic",
+        "answer_rule": "month_day",
+        "choices_rule": "date_4 (정답 + 앞뒤 며칠 3개, 순서 섞기)"
+      }
+    },
+
+    "messages": {
+      "correct": "맞아요, 잘하셨어요!",
+      "wrong_first": "비슷해요, 하나만 더 생각해볼까요?",
+      "wrong_second": "괜찮아요, 오늘은 여기까지도 잘하셨어요",
+      "_forbidden": ["틀렸습니다", "오답입니다", "다시 하세요", "정답은 ~입니다"],
+      "_note": "2차 오답에서도 정답을 알려주지 않는다. PRD §3.4."
+    }
+  },
+
+  "days": [
+    {
+      "day": 1,
+      "theme": "요일",
+      "main": {
+        "1": {
+          "id": 1121,
+          "prompt": "일주일은 며칠이에요?",
+          "choices": ["7일", "10일"],
+          "answer_type": "static",
+          "answer": "7일"
+        },
+        "2": {
+          "id": 1122,
+          "prompt": "월요일 다음은 무슨 요일이에요?",
+          "choices": ["화요일", "수요일", "목요일", "금요일"],
+          "answer_type": "static",
+          "answer": "화요일"
+        },
+        "3": {
+          "id": 1123,
+          "prompt": "모레는 무슨 요일이에요?",
+          "answer_type": "dynamic",
+          "answer_rule": "weekday_offset:+2",
+          "choices_rule": "weekday_4"
+        }
+      },
+      "recall": {
+        "prompt": "젊으실 때는 무슨 요일을 제일 기다리셨어요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "달력에서 오늘 날짜를 한번 찾아보세요"
+      }
+    },
+
+    {
+      "day": 2,
+      "theme": "계절",
+      "main": {
+        "1": {
+          "id": 1221,
+          "prompt": "지금은 더운 계절이에요, 추운 계절이에요?",
+          "answer_type": "dynamic",
+          "answer_rule": "season_temp",
+          "choices_rule": "fixed:['더운 계절','추운 계절']",
+          "_note": "봄·가을이면 이 문항을 건너뛰고 day2 level1 예비 문항(1224)을 쓴다."
+        },
+        "1_alt": {
+          "id": 1224,
+          "prompt": "우리나라 계절은 봄, 여름, 가을, 겨울. 모두 몇 개예요?",
+          "choices": ["네 개", "여섯 개"],
+          "answer_type": "static",
+          "answer": "네 개"
+        },
+        "2": {
+          "id": 1222,
+          "prompt": "지금은 어느 계절이에요?",
+          "choices": ["봄", "여름", "가을", "겨울"],
+          "answer_type": "dynamic",
+          "answer_rule": "season"
+        },
+        "3": {
+          "id": 1223,
+          "prompt": "지금 계절이 지나면 어느 계절이 와요?",
+          "choices": ["봄", "여름", "가을", "겨울"],
+          "answer_type": "dynamic",
+          "answer_rule": "season_next"
+        }
+      },
+      "recall": {
+        "prompt": "이맘때 계절이면 뭐가 제일 먼저 떠오르세요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "창문을 열고 바깥 공기를 한번 쐬어보세요"
+      }
+    },
+
+    {
+      "day": 3,
+      "theme": "달력",
+      "main": {
+        "1": {
+          "id": 1321,
+          "prompt": "일 년은 몇 달이에요?",
+          "choices": ["열두 달", "스무 달"],
+          "answer_type": "static",
+          "answer": "열두 달"
+        },
+        "2": {
+          "id": 1322,
+          "prompt": "지금은 몇 월이에요?",
+          "answer_type": "dynamic",
+          "answer_rule": "month",
+          "choices_rule": "month_4 (정답 + 인접 월 3개, 순서 섞기)"
+        },
+        "3": {
+          "id": 1323,
+          "prompt": "올해는 몇 년도예요?",
+          "answer_type": "dynamic",
+          "answer_rule": "year",
+          "choices_rule": "year_4 (정답 + 앞뒤 연도 3개, 순서 섞기)"
+        }
+      },
+      "recall": {
+        "prompt": "달력에 꼭 표시해두시던 날이 있었어요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "물 한 잔 천천히 드셔보세요"
+      }
+    },
+
+    {
+      "day": 4,
+      "theme": "명절",
+      "main": {
+        "1": {
+          "id": 1421,
+          "prompt": "설날에 먹는 음식은 뭐예요?",
+          "choices": ["떡국", "냉면"],
+          "answer_type": "static",
+          "answer": "떡국"
+        },
+        "2": {
+          "id": 1422,
+          "prompt": "추석에 뜨는 달은 어떤 모양이에요?",
+          "choices": ["보름달", "반달", "초승달", "그믐달"],
+          "answer_type": "static",
+          "answer": "보름달"
+        },
+        "3": {
+          "id": 1423,
+          "prompt": "정월대보름에 하는 건 뭐예요?",
+          "choices": ["부럼 깨기", "송편 빚기", "세배하기", "팥죽 먹기"],
+          "answer_type": "static",
+          "answer": "부럼 깨기",
+          "_note": "보기 네 개 모두 실제 세시풍속이라 단서 없이 구분해야 함 → level 3."
+        }
+      },
+      "recall": {
+        "prompt": "명절에 제일 좋았던 게 뭐였어요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "가족한테 안부 한마디 남겨보세요"
+      }
+    },
+
+    {
+      "day": 5,
+      "theme": "우리 동네",
+      "main": {
+        "1": {
+          "id": 1521,
+          "prompt": "편지를 부치는 곳은 어디예요?",
+          "choices": ["우체국", "미용실"],
+          "answer_type": "static",
+          "answer": "우체국"
+        },
+        "2": {
+          "id": 1522,
+          "prompt": "돈을 찾으려면 어디에 가야 해요?",
+          "choices": ["은행", "약국", "빵집", "이발소"],
+          "answer_type": "static",
+          "answer": "은행"
+        },
+        "3": {
+          "id": 1523,
+          "prompt": "주민등록등본은 어디서 뗄 수 있어요?",
+          "choices": ["동사무소", "우체국", "보건소", "경찰서"],
+          "answer_type": "static",
+          "answer": "동사무소",
+          "_note": "보기 넷 다 관공서라 단서 없이 구분해야 함 → level 3. 정답만 길면 길이로 눈치채므로 보기 길이를 3~4글자로 맞춤. 공식 명칭은 행정복지센터지만 70대에게는 '동사무소'가 통한다."
+        }
+      },
+      "recall": {
+        "prompt": "예전에 살던 동네는 어떤 곳이었어요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "집 앞을 열 걸음만 걸어보세요"
+      }
+    }
+  ],
+
+  "_design_notes": [
+    "지역 중립: 특정 지역 지명·사투리·지역 축제를 쓰지 않았다.",
+    "타이핑 없음: 모든 문항이 탭으로만 답할 수 있다. 자유 회상형(주관식)은 어르신 제약상 배제.",
+    "recall과 mood는 judged:false — 정답이 없다. 판정하지 않고 넘어간다.",
+    "dynamic 문항은 answer를 DB에 저장할 수 없다. 서버가 요청 시각 기준으로 계산한다.",
+    "day2 level1은 계절에 따라 1221(여름·겨울) 또는 1224(봄·가을)를 쓴다.",
+    "명절 문항(day4)은 static이지만 문화 지식에 가깝다. 순수 지남력은 아니나 시간 지남력의 문화적 앵커 역할."
+  ]
+}
