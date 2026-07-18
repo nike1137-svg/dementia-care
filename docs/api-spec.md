@@ -341,10 +341,10 @@ X-User-Id: 550e8400-...
 
 ## 9. 목데이터 (Phase 1용)
 
-`mocks/` 폴더에 **이 명세와 똑같은 모양**으로 만든다.
+`public/mocks/` 폴더에 **이 명세와 똑같은 모양**으로 만든다.
 
 ```
-mocks/
+public/mocks/
 ├── users.json            ← 2. 응답
 ├── session-today.json    ← 3. 응답
 ├── answer-correct.json   ← 4. 정답 응답
@@ -354,8 +354,9 @@ mocks/
 └── history.json          ← 6. 응답
 ```
 
-> ★ 목데이터가 명세와 같은 모양이면, Phase 3에서 **import를 fetch로 바꾸는 것만으로** 교체가 끝난다.
-> 화면 코드는 거의 안 바뀐다.
+> ★ **`public/`에 두는 이유**: 브라우저가 `fetch('/mocks/...')`로 **실제 HTTP 요청**해서 읽는다.
+>   import로 번들에 박으면 로딩·에러 상태가 한 번도 실행되지 않는 **죽은 코드**가 된다 (Phase 3에서 처음 실행 → 버그 시 어르신이 흰 화면).
+> ★ **Phase 3 교체**: fetch URL을 `/mocks/history.json` → `/api/py/history`로 **한 줄만** 바꾸면 끝. 화면 코드는 그대로.
 
 ---
 

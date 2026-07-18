@@ -25,6 +25,7 @@
 | 🔴 최상 | SSH 키 · 클라우드 credential · API 키 | 계정 연쇄 탈취 |
 | 🔴 최상 | Docker 소켓(`/var/run/docker.sock`) | **= 호스트 root 권한** |
 | 🟠 상 | n8n 워크플로우(5678) | 자동화 자산 + 내장 credential |
+| 🟠 상 | 회의실(~/meeting-room) — Node.js 주식 토론 시스템, 포트 3000 | 자체 구축 자산 + Vertex AI 과금 노출 |
 | 🟠 상 | Obsidian vault · 개인 파일 | 개인정보 |
 | 🟠 상 | Cloudflare 계정 · 터널 토큰 | 도메인·터널 탈취 |
 | 🟠 상 | GitHub 계정(nike1137-svg) | 코드·이력 |
@@ -63,6 +64,7 @@
 | **AS-6** | GitHub 레포 | 공개 | 비밀값 유출 |
 | **AS-7** | Cloudflare 계정 | 외부 | 터널 탈취 |
 | **AS-8** | 앱 입력 검증 | 공개 URL 경유 | 데이터 조작 |
+| **AS-9** | 회의실 포트 3000이 0.0.0.0 바인딩 | 집 네트워크 전체 | 무단 호출 → Vertex AI 과금 |
 
 ---
 
@@ -203,3 +205,4 @@ Cloudflare Access를 앞에 세우면 공개 URL이 **초대된 사람만** 열 
 | 2 | DB: PostgreSQL vs SQLite | SQLite = 컨테이너 1개 감소, 공격 표면 축소 |
 | 3 | 터널 주소 | 서브도메인 예외 / 임시 URL / 신규 도메인 |
 | 4 | 컨테이너 실행 UID | 호스트 UID 확인 필요 (볼륨 권한) |
+| 5 | 회의실 포트 3000을 127.0.0.1로 제한할지 | 현재 0.0.0.0. 텔레그램 브리핑은 localhost 호출이라 영향 없을 것으로 보이나 확인 필요 |
