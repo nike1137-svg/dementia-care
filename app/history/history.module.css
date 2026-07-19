@@ -1,0 +1,94 @@
+/* app/history/history.module.css — 기록 화면(최근 7일 도장판).
+ * 모든 수치·색은 tokens.css 변수만 참조.
+ * 화면 틀·로딩·에러 UI는 AsyncBoundary로 공통화됨.
+ * ★ 정답률·점수·성적은 표시하지 않는다 (api-spec §6, PRD §3.4). */
+
+.history {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--stack-gap);
+  width: 100%;
+  max-width: var(--content-max);
+}
+
+.title {
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-strong);
+  color: var(--color-fg);
+}
+
+/* 7일 도장 — 좁으면 줄바꿈, 스크롤 없이 */
+.board {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--gap-buttons);
+  width: 100%;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.date {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-fg-muted);
+}
+
+.stamp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--stamp-size);
+  height: var(--stamp-size);
+  border-radius: 50%;
+  border: var(--border-width) solid var(--color-border);
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-strong);
+  line-height: 1;
+}
+
+/* 했다: 채워진 도장 + ✓ (모양·기호로 구분) */
+.completed {
+  background: var(--color-invert-bg);
+  color: var(--color-invert-fg);
+}
+
+/* 안 함: 빈 도장 + · (테두리만) */
+.missed {
+  background: var(--color-bg);
+  color: var(--color-fg-muted);
+}
+
+.dayLabel {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-fg);
+}
+
+/* 홈으로 단추 */
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: var(--content-max);
+  min-height: var(--touch-min);
+  padding: var(--gap-buttons);
+  font-family: var(--font-family);
+  font-size: var(--font-size-question);
+  font-weight: var(--font-weight-strong);
+  color: var(--color-invert-fg);
+  background: var(--color-invert-bg);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
