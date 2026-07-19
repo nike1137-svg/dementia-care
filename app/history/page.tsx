@@ -3,16 +3,17 @@
 import styles from "./history.module.css";
 import { useFetch } from "../lib/useFetch";
 import { AsyncBoundary } from "../components/AsyncBoundary";
+import { getOrCreateUserId } from "../lib/userId";
 
-// Phase 3 교체: 이 URL만 "/api/py/history"로 바꾼다 (api-spec §9).
-const HISTORY_URL = "/mocks/history.json";
+const HISTORY_URL = "/api/py/history";
 
 // api-spec §6 history 응답. 정답률·점수는 없다(의도적) — 도장판은 "했다/안 했다"만.
 type Day = { date: string; completed: boolean; domain: string | null };
 type History = { days: Day[] };
 
 async function loadHistory(): Promise<History> {
-  const res = await fetch(HISTORY_URL);
+  const userId = await getOrCreateUserId();
+  const res = await fetch(HISTORY_URL, { headers: { "X-User-Id": userId } });
   if (!res.ok) throw new Error(`history ${res.status}`);
   return (await res.json()) as History;
 }

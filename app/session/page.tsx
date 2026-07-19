@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import styles from "./session.module.css";
 import { useFetch } from "../lib/useFetch";
 import { AsyncBoundary } from "../components/AsyncBoundary";
+import { getOrCreateUserId } from "../lib/userId";
 
-// Phase 3 교체: 이 URL만 "/api/py/session/today"로 바꾸면 실제 백엔드로 전환된다 (api-spec §9).
-const SESSION_URL = "/mocks/session-today.json";
+const SESSION_URL = "/api/py/session/today";
 
 // api-spec §3 GET /api/py/session/today 응답 (answer 없음 — 의도적)
 type Step = {
@@ -36,34 +36,50 @@ type AnswerResponse = {
   next_action: "retry" | "proceed";
 };
 
+// api-spec §5 complete 응답. /done 화면이 sessionStorage로 이어받아 그대로 쓴다.
+type CompleteResponse = {
+  session_id: number;
+  streak_days: number;
+  next_level: number;
+  level_changed: boolean;
+  mission: string;
+  message: string;
+};
+
 async function loadSession(): Promise<Session> {
-  const res = await fetch(SESSION_URL);
+  const userId = await getOrCreateUserId();
+  const res = await fetch(SESSION_URL, { headers: { "X-User-Id": userId } });
   if (!res.ok) throw new Error(`session ${res.status}`);
   return (await res.json()) as Session;
 }
 
-/*
- * ★ 목 판정 재현 (진짜 판정이 아니다. Phase 2에서 FastAPI가 실제로 판정한다).
- *   프런트는 정답을 모른다 — 어느 선택지가 맞는지 보지 않는다.
- *   오직 "단계 + 시도 횟수"로 어떤 목 응답을 보여줄지 스크립트할 뿐이다.
- *     - warmup: 재시도 흐름 시연 (wrong-1: 다시 → wrong-2: 넘어가기)
- *     - main  : 정답 흐름 시연 (correct, 1번째에 proceed)
- */
-function mockAnswerFile(step: StepKey, attempt: number): string {
-  if (step === "warmup") {
-    return attempt >= 2 ? "answer-wrong-2.json" : "answer-wrong-1.json";
-  }
-  return "answer-correct.json";
-}
-
-async function submitMockAnswer(
-  step: StepKey,
-  attempt: number,
+async function submitAnswer(
+  sessionId: number,
+  questionId: number,
+  response: string,
 ): Promise<AnswerResponse> {
-  // Phase 2 교체: POST /api/py/session/{id}/answer 로 실제 제출 (서버가 판정).
-  const res = await fetch(`/mocks/${mockAnswerFile(step, attempt)}`);
+  const userId = await getOrCreateUserId();
+  const res = await fetch(`/api/py/session/${sessionId}/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-User-Id": userId },
+    body: JSON.stringify({ question_id: questionId, response }),
+  });
   if (!res.ok) throw new Error(`answer ${res.status}`);
   return (await res.json()) as AnswerResponse;
+}
+
+async function submitComplete(
+  sessionId: number,
+  mood: string | null,
+): Promise<CompleteResponse> {
+  const userId = await getOrCreateUserId();
+  const res = await fetch(`/api/py/session/${sessionId}/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-User-Id": userId },
+    body: JSON.stringify({ mood }),
+  });
+  if (!res.ok) throw new Error(`complete ${res.status}`);
+  return (await res.json()) as CompleteResponse;
 }
 
 type Feedback = { message: string; nextAction: "retry" | "proceed" };
@@ -72,47 +88,63 @@ export default function SessionPage() {
   const router = useRouter();
   const { status, data: session, retry, reportError } = useFetch(loadSession);
   const [stepIndex, setStepIndex] = useState(0);
-  const [attempts, setAttempts] = useState(0);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [mood, setMood] = useState<string | null>(null);
 
   // 새 세션이 로드되면(초기·재시도) 진행 상태 초기화.
   useEffect(() => {
     if (session) {
       setStepIndex(0);
-      setAttempts(0);
       setFeedback(null);
+      setMood(null);
     }
   }, [session]);
 
-  // 다음 단계로. 마지막(mission) 다음엔 /done. 판정 상태 초기화.
-  // ★ router.push는 상태 업데이터 밖에서 호출한다 (업데이터 안에서 부르면
-  //   렌더 도중 Router 상태를 바꿔 "setState in render" 오류가 난다).
+  // 다음 단계로 (마지막 단계는 finishSession이 처리 — 여기선 안 불린다).
   const advance = useCallback(() => {
-    setAttempts(0);
     setFeedback(null);
-    if (stepIndex >= STEP_ORDER.length - 1) {
-      router.push("/done");
-    } else {
-      setStepIndex(stepIndex + 1);
-    }
-  }, [stepIndex, router]);
+    setStepIndex((i) => Math.min(i + 1, STEP_ORDER.length - 1));
+  }, []);
 
-  // 판정 단계에서 선택지 탭 → 목 응답 → next_action 으로 분기 (retry / proceed)
+  // mood는 판정 없지만 값은 기억해뒀다가 완료 시 서버로 보낸다 (api-spec §5 요청 바디).
+  const onMoodChoice = useCallback(
+    (choice: string) => {
+      setMood(choice);
+      advance();
+    },
+    [advance],
+  );
+
+  // 판정 단계에서 선택지 탭 → 서버가 실제 판정 → next_action으로 분기 (retry/proceed).
+  // attempts는 서버가 (session_id, question_id)로 관리 — 프런트는 세지 않는다 (§0.5).
   const onAnswer = useCallback(
-    (stepKey: StepKey) => {
-      const attempt = attempts + 1;
-      setAttempts(attempt);
+    (questionId: number, response: string) => {
+      if (!session) return;
       setSubmitting(true);
-      submitMockAnswer(stepKey, attempt)
+      submitAnswer(session.session_id, questionId, response)
         .then((resp) => {
           setFeedback({ message: resp.message, nextAction: resp.next_action });
         })
         .catch(() => reportError())
         .finally(() => setSubmitting(false));
     },
-    [attempts, reportError],
+    [session, reportError],
   );
+
+  // 마지막(mission) 단추: 완료 처리 후 /done. 결과는 sessionStorage로 넘긴다 —
+  // session_id·mood는 이 화면에서만 알 수 있어 /done이 스스로 재요청할 수 없다.
+  const finishSession = useCallback(() => {
+    if (!session) return;
+    setSubmitting(true);
+    submitComplete(session.session_id, mood)
+      .then((resp) => {
+        sessionStorage.setItem("completeResult", JSON.stringify(resp));
+        router.push("/done");
+      })
+      .catch(() => reportError())
+      .finally(() => setSubmitting(false));
+  }, [session, mood, router, reportError]);
 
   const key = STEP_ORDER[stepIndex];
   const step = session?.steps[key];
@@ -139,7 +171,7 @@ export default function SessionPage() {
               다음
             </button>
           ) : step.choices ? (
-            // 선택지 단계. 판정 단계(warmup·main)는 onAnswer, 아니면(mood) 바로 다음.
+            // 선택지 단계. 판정 단계(warmup·main)는 서버로 제출, mood는 값만 기억하고 다음으로.
             // retry면 이 분기로 다시 와서 선택지가 재활성화된다.
             <div className={styles.choices}>
               {step.choices.map((choice) => (
@@ -148,7 +180,11 @@ export default function SessionPage() {
                   type="button"
                   className={styles.button}
                   disabled={submitting}
-                  onClick={judged ? () => onAnswer(key) : advance}
+                  onClick={
+                    judged
+                      ? () => onAnswer(step.question_id as number, choice)
+                      : () => onMoodChoice(choice)
+                  }
                 >
                   {choice}
                 </button>
@@ -156,7 +192,12 @@ export default function SessionPage() {
             </div>
           ) : (
             // 선택지 없는 단계(recall·mission)
-            <button type="button" className={styles.button} onClick={advance}>
+            <button
+              type="button"
+              className={styles.button}
+              disabled={submitting}
+              onClick={isLast ? finishSession : advance}
+            >
               {isLast ? "오늘 마치기" : "다음"}
             </button>
           )}
