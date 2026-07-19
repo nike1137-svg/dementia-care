@@ -17,15 +17,21 @@ import json
 import logging
 import random
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+import db
+
 app = FastAPI(title="dementia-care API")
 logger = logging.getLogger("uvicorn.error")
+
+# docs/db-schema.md의 3테이블 생성 (Phase 4-b: users만 실사용, 나머지는 4-c).
+# 모듈은 프로세스당 한 번만 로드되므로 여기서 바로 실행한다.
+db.init_db()
 
 # ── 문항 데이터 (DB 대신 파일에서 로드) ────────────────────────────
 CONTENT_PATH = Path(__file__).resolve().parent.parent / "content" / "questions-week1.json"
@@ -232,8 +238,16 @@ def health():
 
 @app.post("/users", status_code=201)
 def create_user():
-    # §2. DB가 없어 발급만 한다 (Phase 4에서 저장). 익명 UUID.
-    return {"user_id": str(uuid.uuid4()), "level": 1, "week": 1}
+    # §2. 익명 UUID를 발급하고 users 테이블에 저장한다 (Phase 4-b: 진짜 저장).
+    # 파라미터화 쿼리(?)만 쓴다 — 문자열 이어붙이기 금지 (SQL 인젝션 방지, 절대 규칙).
+    user_id = str(uuid.uuid4())
+    created_at = datetime.now().isoformat()
+    with db.get_connection() as conn:
+        conn.execute(
+            "INSERT INTO users (user_id, level, week, created_at) VALUES (?, ?, ?, ?)",
+            (user_id, 1, 1, created_at),
+        )
+    return {"user_id": user_id, "level": 1, "week": 1}
 
 
 @app.get("/session/today")
