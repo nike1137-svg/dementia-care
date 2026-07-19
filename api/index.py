@@ -38,7 +38,9 @@ CONTENT_PATH = Path(__file__).resolve().parent.parent / "content" / "questions-w
 with CONTENT_PATH.open(encoding="utf-8") as f:
     CONTENT = json.load(f)
 
-# 임시: DB 없어 사용자별 레벨 조회 불가. Phase 4에서 users.level로 대체. docs/decisions.md 참조
+# session/today는 Phase 4-c-1부터 users.level을 DB에서 직접 조회한다(get_user_level).
+# 이 상수는 answer/complete의 메모리 스트릭 상태(_streaks) 초기값으로만 남아있다
+# — 그쪽은 아직 이관 전(Phase 4-c-2/3). docs/decisions.md 참조.
 DEFAULT_LEVEL = 2
 
 # Mon=0 … Sun=6 (date.weekday()와 정렬)
@@ -97,6 +99,21 @@ def require_user_id(x_user_id: str | None = Header(default=None, alias="X-User-I
     if not x_user_id or not _is_uuid(x_user_id):
         raise ApiError(401, "NO_USER_ID", "누구신지 확인하지 못했어요. 다시 시작해 주세요")
     return x_user_id
+
+
+def get_user_level(user_id: str) -> int:
+    """users 테이블에서 level을 조회한다 (파라미터화 쿼리).
+    형식은 맞지만(UUID) 우리 시스템에 없는 user_id — 발급받은 적 없거나 DB가
+    초기화된 경우다. NO_USER_ID와 같은 401로 응답한다: 클라이언트 입장에서
+    "이 헤더로는 누구인지 확인 못 했다"는 사실은 헤더가 없을 때와 동일하고,
+    처리 방법도 같다 (POST /users로 다시 발급받아 재시작)."""
+    with db.get_connection() as conn:
+        row = conn.execute(
+            "SELECT level FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    if row is None:
+        raise ApiError(401, "NO_USER_ID", "누구신지 확인하지 못했어요. 다시 시작해 주세요")
+    return row["level"]
 
 
 # ── 결정적 셔플 (api-spec §0.5) ───────────────────────────────────
@@ -257,7 +274,7 @@ def session_today(user_id: str = Depends(require_user_id)):
     session_id = derive_session_id(user_id, today)
     day = CONTENT["days"][0]
     common = CONTENT["common"]
-    level = DEFAULT_LEVEL
+    level = get_user_level(user_id)
 
     # mood: 판정 없음 + 정서 척도(좋아요→별로예요)라 순서 유지 (셔플 안 함)
     mood = {
