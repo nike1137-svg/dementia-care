@@ -3,5 +3,6 @@
   "streak_days": 5,
   "next_level": 3,
   "level_changed": true,
+  "mission": "달력에서 오늘 날짜를 한번 찾아보세요",
   "message": "5일째 연속이에요. 대단하세요!"
 }
