@@ -6,8 +6,9 @@ api-spec §0.1: 브라우저는 /api/py/* 를 호출하고, Next.js rewrites가 
 Phase 2-b-1: 판정 없는 엔드포인트 3개 (users, session/today, history).
 Phase 2-b-2: 판정 있는 엔드포인트 2개 (answer, complete).
              로직은 실제로 짜고 문항 데이터는 content/questions-week1.json 에서 읽는다.
-             DB는 없다 (Phase 4에서 붙음). answer(정답)·점수는 절대 응답에 넣지 않는다.
-             시도 횟수·연속 성공/실패는 프로세스 메모리에 보관 (재시작하면 초기화 — 지금은 허용).
+             answer(정답)·점수는 절대 응답에 넣지 않는다.
+Phase 4:     users·daily_completions·session_progress를 SQLite로 이관 완료.
+             메모리에 남은 건 attempts(세션 내 시도 횟수, 의도적 유지)뿐이다.
 
 로컬 확인: uvicorn index:app --host 127.0.0.1 --port 8000
 """
@@ -42,11 +43,11 @@ with CONTENT_PATH.open(encoding="utf-8") as f:
 # Mon=0 … Sun=6 (date.weekday()와 정렬)
 WEEKDAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 
-# ── 임시 상태 저장 (DB 미이관분만, Phase 4-c-3에서 session_progress로 옮김) ──
-# 서버 재시작하면 초기화된다 — 지금은 허용. level은 Phase 4-c-1/4-c-2부터 DB가
-# 유일한 출처라 여기엔 안 둔다 (consecutive_correct/wrong만 메모리에 남음).
+# ── 유일하게 남은 메모리 상태 (4-a 결정: 세션 내 임시값이라 DB 불필요) ──────
+# 서버 재시작하면 초기화된다 — 의도된 동작이다 (진행 중이던 문항 재시도 상태일
+# 뿐, 사용자 식별 데이터가 아니다). consecutive_correct/wrong은 이제 DB
+# session_progress로 옮겼다 (Phase 4-c-3, 아래).
 _attempts: dict[tuple[int, int], int] = {}  # (session_id, question_id) -> 시도 횟수
-_streaks: dict[str, dict] = {}  # user_id -> {"consecutive_correct", "consecutive_wrong"}
 
 
 # ── 에러 체계 (api-spec §0.4) ─────────────────────────────────────
@@ -206,15 +207,58 @@ def judge(question: dict, response: str, today: date) -> bool:
     return response == compute_dynamic_answer(question["answer_rule"], today)
 
 
-def _record_outcome(user_id: str, *, success: bool) -> None:
+# ── 연속 성공/실패 (session_progress, Phase 4-c-3) ────────────────
+def get_progress(user_id: str) -> tuple[int, int]:
+    """(consecutive_correct, consecutive_wrong). 행이 없으면 (0, 0).
+
+    ★ user_id 기준 한 행만 유지한다(session_id로 나누지 않는다). judged 문항이
+    하루(세션) 안에 warmup·main 2개뿐이라, 3연속 성공은 여러 세션(날짜)에 걸쳐야
+    실제로 채워진다 — 세션마다 새로 세면 이 규칙(PRD §3.3)이 절대 트리거되지
+    않는다. session_id 컬럼은 "가장 최근에 갱신한 세션"을 남기는 참고용이다."""
+    with db.get_connection() as conn:
+        row = conn.execute(
+            "SELECT consecutive_correct, consecutive_wrong FROM session_progress WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return 0, 0
+    return row["consecutive_correct"], row["consecutive_wrong"]
+
+
+def save_progress(
+    user_id: str, session_id: int, consecutive_correct: int, consecutive_wrong: int
+) -> None:
+    """user_id당 한 행을 유지하는 수동 upsert (파라미터화 쿼리만 사용)."""
+    with db.get_connection() as conn:
+        existing = conn.execute(
+            "SELECT 1 FROM session_progress WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE session_progress "
+                "SET session_id = ?, consecutive_correct = ?, consecutive_wrong = ? "
+                "WHERE user_id = ?",
+                (str(session_id), consecutive_correct, consecutive_wrong, user_id),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO session_progress "
+                "(session_id, user_id, consecutive_correct, consecutive_wrong) "
+                "VALUES (?, ?, ?, ?)",
+                (str(session_id), user_id, consecutive_correct, consecutive_wrong),
+            )
+
+
+def _record_outcome(user_id: str, session_id: int, *, success: bool) -> None:
     """문항의 '최종' 결과(재시도 중이 아닌)만 연속 성공/실패에 반영한다."""
-    s = _streaks.setdefault(user_id, {"consecutive_correct": 0, "consecutive_wrong": 0})
+    correct, wrong = get_progress(user_id)
     if success:
-        s["consecutive_correct"] += 1
-        s["consecutive_wrong"] = 0
+        correct += 1
+        wrong = 0
     else:
-        s["consecutive_wrong"] += 1
-        s["consecutive_correct"] = 0
+        wrong += 1
+        correct = 0
+    save_progress(user_id, session_id, correct, wrong)
 
 
 # ── 도장판·연속 참여일 (daily_completions, api-spec §5·§6) ─────────
@@ -381,7 +425,7 @@ def submit_answer(
 
     if correct:
         # 1차든 2차 시도든, 맞으면 성공 — 재시도 규칙과 무관하게 바로 통과.
-        _record_outcome(user_id, success=True)
+        _record_outcome(user_id, session_id, success=True)
         return {
             "correct": True,
             "attempts": attempt,
@@ -391,7 +435,7 @@ def submit_answer(
 
     if attempt >= 2:
         # 2차 오답 → 최종 실패. 정답은 끝까지 알려주지 않는다.
-        _record_outcome(user_id, success=False)
+        _record_outcome(user_id, session_id, success=False)
         return {
             "correct": False,
             "attempts": attempt,
@@ -419,22 +463,22 @@ def complete_session(
     record_completion(user_id, today)
 
     # §5. 3연속 성공 → 상승 / 2연속 실패 → 하강 (PRD §3.3). 여기서만 난이도가 바뀐다.
-    # consecutive_correct/wrong은 아직 메모리(Phase 4-c-3에서 session_progress로 이관).
-    # level 자체는 Phase 4-c-1부터 DB가 유일한 출처 — 여기서도 DB에서 읽고 DB에 쓴다.
-    s = _streaks.setdefault(user_id, {"consecutive_correct": 0, "consecutive_wrong": 0})
+    # consecutive_correct/wrong·level 전부 DB가 유일한 출처 (Phase 4-c-1/2/3).
+    consecutive_correct, consecutive_wrong = get_progress(user_id)
     level = get_user_level(user_id)
     next_level = level
 
-    if s["consecutive_correct"] >= 3:
+    if consecutive_correct >= 3:
         next_level = min(level + 1, 3)
-        s["consecutive_correct"] = 0
-    elif s["consecutive_wrong"] >= 2:
+        consecutive_correct = 0
+    elif consecutive_wrong >= 2:
         next_level = max(level - 1, 1)
-        s["consecutive_wrong"] = 0
+        consecutive_wrong = 0
 
     level_changed = next_level != level
     if level_changed:
         update_user_level(user_id, next_level)
+        save_progress(user_id, session_id, consecutive_correct, consecutive_wrong)
 
     # streak_days: daily_completions에서 실제 집계 (Phase 4-c-2, 고정 샘플 제거).
     completed_dates = get_completed_dates(user_id)

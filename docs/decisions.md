@@ -19,3 +19,5 @@ users·daily_completions·session_progress 3테이블. 도장판은 daily_comple
 ## 2026-07-20 — Phase 4-c-2에서 해소됨 — history/complete의 고정 샘플
 
 /history의 도장판과 /complete의 streak_days는 Phase 2-b-1·2-b-2에서 DB가 없어 고정 샘플(`pattern`/`PAST_DAYS_SAMPLE`)로 형태만 흉내 냈다. 이 임시조치는 코드 주석에만 적혀 있었고 이 문서엔 정식 항목이 없었다 — 지금 처음이자 마지막으로 기록한다. `daily_completions` 테이블에서 실제 집계하도록 대체 완료(A 방식, `docs/db-schema.md` §2.1). 고정 샘플 코드(`PAST_DAYS_SAMPLE`)는 삭제했다.
+
+## 2026-07-20 — Phase 4-c-3 완료 — session_progress로 연속 성공/실패 이관. 메모리 상태는 attempts(세션 내 임시값, 의도적 유지)만 남고 영구 데이터는 전부 DB로. Phase 4 종료.
