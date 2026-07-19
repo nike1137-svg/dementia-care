@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import random
+import sqlite3
 import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -38,22 +39,14 @@ CONTENT_PATH = Path(__file__).resolve().parent.parent / "content" / "questions-w
 with CONTENT_PATH.open(encoding="utf-8") as f:
     CONTENT = json.load(f)
 
-# session/today는 Phase 4-c-1부터 users.level을 DB에서 직접 조회한다(get_user_level).
-# 이 상수는 answer/complete의 메모리 스트릭 상태(_streaks) 초기값으로만 남아있다
-# — 그쪽은 아직 이관 전(Phase 4-c-2/3). docs/decisions.md 참조.
-DEFAULT_LEVEL = 2
-
 # Mon=0 … Sun=6 (date.weekday()와 정렬)
 WEEKDAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 
-# ── 임시 상태 저장 (Phase 2, DB 없음) ──────────────────────────────
-# 서버 재시작하면 초기화된다 — 지금은 허용 (Phase 4에서 SQLite로 대체).
+# ── 임시 상태 저장 (DB 미이관분만, Phase 4-c-3에서 session_progress로 옮김) ──
+# 서버 재시작하면 초기화된다 — 지금은 허용. level은 Phase 4-c-1/4-c-2부터 DB가
+# 유일한 출처라 여기엔 안 둔다 (consecutive_correct/wrong만 메모리에 남음).
 _attempts: dict[tuple[int, int], int] = {}  # (session_id, question_id) -> 시도 횟수
-_streaks: dict[str, dict] = {}  # user_id -> {"level", "consecutive_correct", "consecutive_wrong"}
-
-# history의 고정 샘플과 별개로, complete()의 streak_days '계산 로직'을 실제로 검증하기
-# 위한 최근 6일(오늘 제외) 참여 샘플. 오늘(방금 완료)을 붙여 연속일을 실제로 센다.
-PAST_DAYS_SAMPLE = [True, True, False, True, True, True]  # day-6 … day-1
+_streaks: dict[str, dict] = {}  # user_id -> {"consecutive_correct", "consecutive_wrong"}
 
 
 # ── 에러 체계 (api-spec §0.4) ─────────────────────────────────────
@@ -215,9 +208,7 @@ def judge(question: dict, response: str, today: date) -> bool:
 
 def _record_outcome(user_id: str, *, success: bool) -> None:
     """문항의 '최종' 결과(재시도 중이 아닌)만 연속 성공/실패에 반영한다."""
-    s = _streaks.setdefault(
-        user_id, {"level": DEFAULT_LEVEL, "consecutive_correct": 0, "consecutive_wrong": 0}
-    )
+    s = _streaks.setdefault(user_id, {"consecutive_correct": 0, "consecutive_wrong": 0})
     if success:
         s["consecutive_correct"] += 1
         s["consecutive_wrong"] = 0
@@ -226,15 +217,48 @@ def _record_outcome(user_id: str, *, success: bool) -> None:
         s["consecutive_correct"] = 0
 
 
-def compute_streak_days(past_completed: list[bool], today_completed: bool) -> int:
-    """오늘을 포함해 뒤에서부터 연속 완료일 수를 센다. (PRD §... 연속 참여일)"""
-    full = [*past_completed, today_completed]
+# ── 도장판·연속 참여일 (daily_completions, api-spec §5·§6) ─────────
+def get_completed_dates(user_id: str) -> set[str]:
+    """이 사용자가 완료한 모든 날짜(YYYY-MM-DD)를 daily_completions에서 조회."""
+    with db.get_connection() as conn:
+        rows = conn.execute(
+            "SELECT date FROM daily_completions WHERE user_id = ?", (user_id,)
+        ).fetchall()
+    return {row["date"] for row in rows}
+
+
+def compute_streak_days(completed_dates: set[str], today: date) -> int:
+    """오늘부터 거꾸로 세어 연속으로 완료한 날 수. 하루라도 빠지면 그 자리에서 멈춘다."""
     streak = 0
-    for done in reversed(full):
-        if not done:
-            break
+    d = today
+    while d.isoformat() in completed_dates:
         streak += 1
+        d -= timedelta(days=1)
     return streak
+
+
+def record_completion(user_id: str, today: date) -> None:
+    """오늘 완료를 daily_completions에 기록.
+
+    (user_id, date) 유일 제약이라 같은 날 두 번째 완료는 막힌다. 조용히 무시하지
+    않고 409 ALREADY_COMPLETED로 응답한다 — session_id가 user_id+날짜로 결정적으로
+    파생되므로(Phase 2-b-1 derive_session_id), '같은 날 재완료'는 곧 '같은 세션 재완료'와
+    같은 사건이고, api-spec §5가 이미 그 상황을 위한 코드를 정의해뒀다. 조용히
+    무시하면 클라이언트가 실수로(예: 중복 클릭) 두 번 보냈을 때도 매번 '성공'
+    응답을 받아 상태 착오를 못 알아챈다."""
+    with db.get_connection() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO daily_completions (user_id, date, completed_at) VALUES (?, ?, ?)",
+                (user_id, today.isoformat(), datetime.now().isoformat()),
+            )
+        except sqlite3.IntegrityError:
+            raise ApiError(409, "ALREADY_COMPLETED", "오늘은 이미 완료했어요")
+
+
+def update_user_level(user_id: str, level: int) -> None:
+    with db.get_connection() as conn:
+        conn.execute("UPDATE users SET level = ? WHERE user_id = ?", (level, user_id))
 
 
 class AnswerRequest(BaseModel):
@@ -318,13 +342,15 @@ def session_today(user_id: str = Depends(require_user_id)):
 @app.get("/history")
 def history(user_id: str = Depends(require_user_id)):
     # §6. 도장판은 '했다/안 했다'만. 정답률·점수는 절대 넣지 않는다.
-    # DB가 없어 고정 샘플 패턴으로 형태만 (Phase 4에서 실제 조회). 날짜는 최근 7일.
+    # daily_completions에서 실제 집계 (Phase 4-c-2, 고정 샘플 제거).
     today = date.today()
-    pattern = [True, True, False, True, True, True, False]
+    completed_dates = get_completed_dates(user_id)
+    streak_days = compute_streak_days(completed_dates, today)
+
     days = []
     for i in range(7):
         d = today - timedelta(days=6 - i)
-        done = pattern[i]
+        done = d.isoformat() in completed_dates
         days.append(
             {
                 "date": d.isoformat(),
@@ -332,7 +358,7 @@ def history(user_id: str = Depends(require_user_id)):
                 "domain": CONTENT["domain"] if done else None,
             }
         )
-    return {"streak_days": 5, "days": days}
+    return {"streak_days": streak_days, "days": days}
 
 
 @app.post("/session/{session_id}/answer")
@@ -388,11 +414,15 @@ def complete_session(
     body: CompleteRequest,
     user_id: str = Depends(require_user_id),
 ):
+    today = date.today()
+    # 오늘 완료를 daily_completions에 기록 (같은 날 재완료는 409 ALREADY_COMPLETED).
+    record_completion(user_id, today)
+
     # §5. 3연속 성공 → 상승 / 2연속 실패 → 하강 (PRD §3.3). 여기서만 난이도가 바뀐다.
-    s = _streaks.setdefault(
-        user_id, {"level": DEFAULT_LEVEL, "consecutive_correct": 0, "consecutive_wrong": 0}
-    )
-    level = s["level"]
+    # consecutive_correct/wrong은 아직 메모리(Phase 4-c-3에서 session_progress로 이관).
+    # level 자체는 Phase 4-c-1부터 DB가 유일한 출처 — 여기서도 DB에서 읽고 DB에 쓴다.
+    s = _streaks.setdefault(user_id, {"consecutive_correct": 0, "consecutive_wrong": 0})
+    level = get_user_level(user_id)
     next_level = level
 
     if s["consecutive_correct"] >= 3:
@@ -403,11 +433,12 @@ def complete_session(
         s["consecutive_wrong"] = 0
 
     level_changed = next_level != level
-    s["level"] = next_level
+    if level_changed:
+        update_user_level(user_id, next_level)
 
-    # streak_days: DB 없어 '이전 기록'은 고정 샘플이지만, 오늘 완료를 더해 연속일을
-    # 세는 로직 자체는 실제로 돈다 (완전 하드코딩 아님).
-    streak_days = compute_streak_days(PAST_DAYS_SAMPLE, today_completed=True)
+    # streak_days: daily_completions에서 실제 집계 (Phase 4-c-2, 고정 샘플 제거).
+    completed_dates = get_completed_dates(user_id)
+    streak_days = compute_streak_days(completed_dates, today)
     mission = CONTENT["days"][0]["mission"]["text"]
     message = (
         f"{streak_days}일째 연속이에요. 대단하세요!"
