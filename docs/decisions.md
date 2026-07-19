@@ -9,3 +9,7 @@
 ## 2026-07-19 — Phase 2-b: /session의 level을 2로 임시 고정
 
 POST /users는 §2대로 level 1을 반환하지만, /session/today는 level 2로 세션을 구성한다. DB가 없어 사용자별 레벨을 저장·조회할 수 없기 때문. 프런트 목데이터(day1·level2)와 맞춰 Phase 3 교체를 매끄럽게 하려는 의도. Phase 4에서 users 테이블의 실제 level로 대체 예정. 이 시점까지 두 값 불일치는 버그가 아니라 임시 상태다.
+
+## 2026-07-20 — Phase 4-a: SQLite 스키마 확정
+
+users·daily_completions·session_progress 3테이블. 도장판은 daily_completions를 날짜로 세어 계산(A 방식). attempts는 메모리 유지, 문항은 파일 유지. 상세 근거는 `docs/db-schema.md` 참조.
