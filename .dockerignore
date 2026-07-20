@@ -1,0 +1,38 @@
+# .dockerignore — Docker는 .gitignore를 안 읽는다. 별도로 관리한다.
+# 두 Dockerfile(Dockerfile, api/Dockerfile) 모두 저장소 루트를 빌드 컨텍스트로
+# 쓰므로(content/가 api/의 형제여야 해서) 이 파일 하나로 둘 다 커버한다.
+
+# ===== 비밀값 — 절대 이미지에 넣지 않는다 =====
+.env
+.env.local
+.env.*
+!.env.example
+
+# ===== Node / Next.js — 컨테이너 안에서 새로 설치·빌드한다 =====
+node_modules
+.next
+npm-debug.log*
+
+# ===== Python =====
+api/.venv
+**/__pycache__
+*.py[cod]
+*.egg-info
+
+# ===== SQLite — named volume 자리. 이미지에 DB 파일을 넣지 않는다 =====
+api/data/*.db
+*.sqlite
+*.sqlite3
+
+# ===== git / 문서 / 로컬 에이전트 설정 — 런타임에 불필요 =====
+.git
+.gitignore
+.dockerignore
+docs
+.claude
+
+# ===== OS / 에디터 =====
+.DS_Store
+*~
+.vscode
+.idea
