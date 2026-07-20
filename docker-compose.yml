@@ -1,0 +1,95 @@
+# docker-compose.yml — dementia-care
+#
+# Phase 5-b: 파일 작성만. 빌드·기동은 5-c에서 (docs/threat-model.md §6 전항목
+# 통과 후). 여기 정의된 값 중 read_only/tmpfs 조합처럼 "이래야 맞을 것"으로
+# 설계했지만 아직 실행해 확인 못 한 부분은 5-c에서 검증 대상이다.
+#
+# 구성 (PRD §7.1):
+#   cloudflared ──▶ web (Next.js:3000) ──▶ api (FastAPI:8000 + SQLite)
+# 전용 네트워크, ports: 매핑 0개. 외부 노출은 cloudflared 하나뿐(Phase 6).
+
+networks:
+  dementia-net:
+    driver: bridge
+    internal: false   # cloudflared의 아웃바운드(터널 연결)만 필요
+    # 기존 n8n·온담이·에이전트 네트워크에 attach하지 않는다 — 이 네트워크는
+    # 이 3개 서비스 전용이다.
+
+volumes:
+  dementia-db:   # SQLite 파일 영속. 호스트 경로 바인드 아님 (threat-model §6)
+
+services:
+  api:
+    build:
+      context: .              # ★ 저장소 루트 — api/index.py가 content/를
+      dockerfile: api/Dockerfile   #   형제 디렉터리로 상대 참조하기 때문 (Phase 5-a)
+    networks:
+      - dementia-net
+    expose:
+      - "8000"        # ports: 없음 — 호스트에 안 열린다. web만 도커 네트워크로 접근
+    volumes:
+      - dementia-db:/app/api/data   # DB_PATH.parent와 동일 경로 (api/db.py)
+    environment:
+      # read_only:true 아래서 .pyc 캐시 쓰기를 시도하지 않게 (없어도 동작엔
+      # 지장 없지만, 조용히 실패하는 대신 아예 안 만들게 한다).
+      PYTHONDONTWRITEBYTECODE: "1"
+    user: "1000:1000"                 # 호스트 UID:GID 확인 완료 (threat-model §8-4)
+    cap_drop:
+      - ALL          # 재추가 없음 — 8000은 비특권 포트라 특별 권한 불필요
+    security_opt:
+      - no-new-privileges:true
+    read_only: true                   # 쓰기는 named volume(DB)과 tmpfs(/tmp)만
+    tmpfs:
+      - /tmp
+    mem_limit: 256m    # FastAPI+SQLite, 개인 단일 사용자 — 넉넉히 여유
+    restart: unless-stopped   # 가용성 목표는 없지만, 죽으면 다시 뜨는 게 공짜 안전망
+
+  web:
+    build:
+      context: .              # Next.js 파일이 저장소 루트에 있어 루트가 컨텍스트
+      dockerfile: Dockerfile
+    networks:
+      - dementia-net
+    expose:
+      - "3000"        # ports: 없음. cloudflared만 같은 네트워크에서 직접 호출(Phase 6)
+    environment:
+      BACKEND_URL: http://api:8000   # 컨테이너 이름으로 api 접근 (도커 내부 DNS)
+    depends_on:
+      - api
+    user: "1000:1000"
+    cap_drop:
+      - ALL          # 재추가 없음 — 3000도 비특권 포트
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache   # Next.js 내부 캐시 — 없어도 동작, tmpfs로 안전하게 허용
+    mem_limit: 512m    # Node + Next 런타임 기본 사용량 (빌드 단계는 무관 — 빌드 시엔 이 제약 안 걸림)
+    restart: unless-stopped
+
+  # ── cloudflared: 자리만. Phase 6 전까지 비활성 ─────────────────────
+  # profiles로 기본 `docker compose up`에서 아예 제외한다 (1차 방어선).
+  # 혹시 profile을 활성화해 실행하더라도 TUNNEL_TOKEN이 없으면 `${VAR:?메시지}`
+  # 문법이 즉시 에러를 내고 멈춘다 (2차 방어선) — "토큰 없으면 안 뜬다"를 이중으로.
+  cloudflared:
+    image: cloudflare/cloudflared:2024.11.0   # 태그 고정. Phase 6 진행 시 최신 안정판 재확인
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN이 필요합니다 — Phase 6에서 .env에 설정}
+    networks:
+      - dementia-net
+    depends_on:
+      - web
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 128m    # 경량 Go 바이너리, 터널 클라이언트뿐
+    restart: "no"      # 지금은 자리만 — 실제 토큰 붙으면 Phase 6에서 unless-stopped로 재검토
+    # ★ 절대 금지: 도커 소켓 마운트 없음. 예외 없음 (threat-model C-4, §6)
