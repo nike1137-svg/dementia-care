@@ -201,8 +201,8 @@ Cloudflare Access를 앞에 세우면 공개 URL이 **초대된 사람만** 열 
 
 | # | 항목 | 비고 |
 |---|---|---|
-| 1 | Cloudflare Access 적용 여부 | 적용 시 무료 한도·과금 여부 사전 조사 필요 |
-| 2 | DB: PostgreSQL vs SQLite | SQLite = 컨테이너 1개 감소, 공격 표면 축소 |
-| 3 | 터널 주소 | 서브도메인 예외 / 임시 URL / 신규 도메인 |
-| 4 | 컨테이너 실행 UID | 호스트 UID 확인 필요 (볼륨 권한) |
+| 1 | Cloudflare Access 적용 여부 | 적용 시 무료 한도·과금 여부 사전 조사 필요 — **[미결정 유지] Phase 6(Cloudflare Tunnel)에서 결정** |
+| 2 | DB: PostgreSQL vs SQLite | SQLite = 컨테이너 1개 감소, 공격 표면 축소 — **[해소] Phase 4에서 SQLite 구현 완료** (PRD §6.1) |
+| 3 | 터널 주소 | 서브도메인 예외 / 임시 URL / 신규 도메인 — **[해소] `care.dodami-ai.com`로 확정** (PRD §"주소") |
+| 4 | 컨테이너 실행 UID | 호스트 UID 확인 필요 (볼륨 권한) — **[해소] 1000:1000 확인** (CLAUDE.md) |
 | 5 | 회의실 포트 3000을 127.0.0.1로 제한할지 | 현재 0.0.0.0. 텔레그램 브리핑은 localhost 호출이라 영향 없을 것으로 보이나 확인 필요 |
