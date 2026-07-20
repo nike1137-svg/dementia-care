@@ -22,8 +22,16 @@ COPY api/ ./api/
 
 # non-root 실행 (threat-model §6 #5). 호스트 UID:GID 1000:1000과 맞춘다
 # (threat-model §8-4에서 확인된 값) — named volume 권한 문제를 피하기 위함이다.
+#
+# ★ /app/api/data를 chown 전에 미리 만들어둔다. named volume이 이 경로에 처음
+#   마운트될 때, Docker는 "마운트되기 전 이미지 안 그 경로의 내용·소유권"을
+#   볼륨 초기값으로 그대로 복사한다 — 이 디렉터리가 미리 1000:1000으로 있어야
+#   볼륨도 1000:1000으로 초기화되고, non-root(1000:1000)인 api가 그 안에
+#   dementia.db를 쓸 수 있다. 없으면 Docker가 root 소유로 만들어 버려서
+#   런타임에 권한 거부(Permission denied)가 난다.
 RUN groupadd --gid 1000 app \
     && useradd --uid 1000 --gid 1000 --create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /app/api/data \
     && chown -R 1000:1000 /app
 
 USER 1000:1000
