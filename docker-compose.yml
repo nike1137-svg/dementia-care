@@ -48,12 +48,17 @@ services:
     build:
       context: .              # Next.js 파일이 저장소 루트에 있어 루트가 컨텍스트
       dockerfile: Dockerfile
+      args:
+        # 빌드용(별개!) — next build가 rewrites() 매니페스트를 구울 때 필요
+        # (next.config.ts fail-loud 검사, Phase 3-a). 비밀값 아님, 안전.
+        BACKEND_URL: http://api:8000
     networks:
       - dementia-net
     expose:
       - "3000"        # ports: 없음. cloudflared만 같은 네트워크에서 직접 호출(Phase 6)
     environment:
-      BACKEND_URL: http://api:8000   # 컨테이너 이름으로 api 접근 (도커 내부 DNS)
+      # 런타임용(별개!) — 컨테이너 이름으로 api 접근 (도커 내부 DNS)
+      BACKEND_URL: http://api:8000
     depends_on:
       - api
     user: "1000:1000"

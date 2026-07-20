@@ -19,6 +19,11 @@ RUN npm ci --omit=dev
 
 # ---- builder: 전체 의존성(devDependencies 포함) + 빌드 ----
 FROM base AS builder
+# next.config.ts의 rewrites()는 next build 시점에 호출돼 라우팅 매니페스트로
+# 굽힌다(Phase 3-a fail-loud 설계 — BACKEND_URL 없으면 에러). 비밀값이 아니라
+# 컨테이너 내부 주소(http://api:8000)일 뿐이라 빌드 인자로 넣어도 안전하다.
+# 값은 docker-compose.yml의 web.build.args가 전달한다 (fail-loud 검사는 유지).
+ARG BACKEND_URL
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
@@ -28,9 +33,11 @@ RUN npm run build
 FROM base AS runner
 ENV NODE_ENV=production
 
-# non-root 실행 (threat-model §6 #5). 호스트 UID:GID 1000:1000과 맞춘다.
-RUN groupadd --gid 1000 nextjs \
-    && useradd --uid 1000 --gid 1000 --create-home --shell /usr/sbin/nologin nextjs
+# non-root 실행 (threat-model §6 #5). node:22-slim(공식 이미지)엔 이미
+# uid:gid 1000:1000인 `node` 사용자가 있다(호스트 UID:GID와 동일, threat-model
+# §8-4) — 새로 만들지 않고 그대로 쓴다. groupadd/useradd를 다시 시도하면
+# gid/uid 1000이 이미 있어 "already exists"로 빌드가 실패한다(exit 4).
+# 홈 디렉터리도 base 이미지가 만들 때 이미 /home/node로 준비돼 있다.
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/public ./public
