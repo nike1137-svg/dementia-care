@@ -73,8 +73,10 @@ services:
     mem_limit: 512m    # Node + Next 런타임 기본 사용량 (빌드 단계는 무관 — 빌드 시엔 이 제약 안 걸림)
     restart: unless-stopped
 
-  # ── cloudflared: 자리만. Phase 6 전까지 비활성 ─────────────────────
-  # profiles로 기본 `docker compose up`에서 아예 제외한다 (1차 방어선).
+  # ── cloudflared: Phase 6 완료. 기동은 `--profile tunnel` 로만 ──────
+  # profiles로 기본 `docker compose up`에서 제외한다 (실수 기동 방어선).
+  # 재시작 정책은 컨테이너 단위라, 한 번 띄워두면 재부팅 후엔 profile 없이도
+  # 도커가 알아서 복구한다 (profiles는 compose 명령에만 관여).
   # 혹시 profile을 활성화해 실행하더라도 TUNNEL_TOKEN이 없으면 `${VAR:?메시지}`
   # 문법이 즉시 에러를 내고 멈춘다 (2차 방어선) — "토큰 없으면 안 뜬다"를 이중으로.
   cloudflared:
@@ -96,5 +98,6 @@ services:
     tmpfs:
       - /tmp
     mem_limit: 128m    # 경량 Go 바이너리, 터널 클라이언트뿐
-    restart: "no"      # 지금은 자리만 — 실제 토큰 붙으면 Phase 6에서 unless-stopped로 재검토
+    restart: unless-stopped   # Phase 6 완료·토큰 적용됨 → 재부팅/데몬 재시작 후 자동 복구.
+                              # (2026-08-16: restart "no" 탓에 3주간 터널이 죽어 있던 것 해결)
     # ★ 절대 금지: 도커 소켓 마운트 없음. 예외 없음 (threat-model C-4, §6)
