@@ -68,6 +68,17 @@ async function submitAnswer(
   return (await res.json()) as AnswerResponse;
 }
 
+// api-spec §0.4 에러 형태 { error: { code, message } }. complete()만 이 code로
+// 분기한다 — 409 ALREADY_COMPLETED는 진짜 에러가 아니라 "오늘은 이미 완료함"
+// 이라는 정상 상태라서, 겁나는 에러 화면과 구분해서 보여줘야 한다 (PRD §3.4).
+class ApiRequestError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 async function submitComplete(
   sessionId: number,
   mood: string | null,
@@ -78,7 +89,13 @@ async function submitComplete(
     headers: { "Content-Type": "application/json", "X-User-Id": userId },
     body: JSON.stringify({ mood }),
   });
-  if (!res.ok) throw new Error(`complete ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new ApiRequestError(
+      body?.error?.code ?? "UNKNOWN",
+      body?.error?.message ?? `complete ${res.status}`,
+    );
+  }
   return (await res.json()) as CompleteResponse;
 }
 
@@ -91,6 +108,7 @@ export default function SessionPage() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [mood, setMood] = useState<string | null>(null);
+  const [alreadyDoneToday, setAlreadyDoneToday] = useState(false);
 
   // 새 세션이 로드되면(초기·재시도) 진행 상태 초기화.
   useEffect(() => {
@@ -98,6 +116,7 @@ export default function SessionPage() {
       setStepIndex(0);
       setFeedback(null);
       setMood(null);
+      setAlreadyDoneToday(false);
     }
   }, [session]);
 
@@ -142,7 +161,13 @@ export default function SessionPage() {
         sessionStorage.setItem("completeResult", JSON.stringify(resp));
         router.push("/done");
       })
-      .catch(() => reportError())
+      .catch((err) => {
+        if (err instanceof ApiRequestError && err.code === "ALREADY_COMPLETED") {
+          setAlreadyDoneToday(true);
+        } else {
+          reportError();
+        }
+      })
       .finally(() => setSubmitting(false));
   }, [session, mood, router, reportError]);
 
@@ -154,54 +179,67 @@ export default function SessionPage() {
 
   return (
     <AsyncBoundary status={status} onRetry={retry}>
-      {step && (
+      {alreadyDoneToday ? (
+        // 409 ALREADY_COMPLETED — 진짜 에러가 아니라 정상 상태. 겁나는 에러
+        // 화면 대신 격려 문구로 보여준다 (PRD §3.4, 실패 경험 주지 않기).
         <div className={styles.step}>
-          <p className={styles.progress}>
-            {stepIndex + 1} / {STEP_ORDER.length}
+          <p className={styles.feedback}>
+            오늘은 이미 잘 하셨어요! 내일 또 만나요.
           </p>
-
-          <h1 className={styles.prompt}>{step.prompt ?? step.text}</h1>
-
-          {/* 서버 message 그대로 표시 (api-spec §4). 부정적 통보 문구는 쓰지 않는다 (PRD §3.4) */}
-          {feedback && <p className={styles.feedback}>{feedback.message}</p>}
-
-          {proceeding ? (
-            // 판정 결과 proceed → 다음 단추 하나
-            <button type="button" className={styles.button} onClick={advance}>
-              다음
-            </button>
-          ) : step.choices ? (
-            // 선택지 단계. 판정 단계(warmup·main)는 서버로 제출, mood는 값만 기억하고 다음으로.
-            // retry면 이 분기로 다시 와서 선택지가 재활성화된다.
-            <div className={styles.choices}>
-              {step.choices.map((choice) => (
-                <button
-                  key={choice}
-                  type="button"
-                  className={styles.button}
-                  disabled={submitting}
-                  onClick={
-                    judged
-                      ? () => onAnswer(step.question_id as number, choice)
-                      : () => onMoodChoice(choice)
-                  }
-                >
-                  {choice}
-                </button>
-              ))}
-            </div>
-          ) : (
-            // 선택지 없는 단계(recall·mission)
-            <button
-              type="button"
-              className={styles.button}
-              disabled={submitting}
-              onClick={isLast ? finishSession : advance}
-            >
-              {isLast ? "오늘 마치기" : "다음"}
-            </button>
-          )}
+          <a className={styles.button} href="/">
+            홈으로
+          </a>
         </div>
+      ) : (
+        step && (
+          <div className={styles.step}>
+            <p className={styles.progress}>
+              {stepIndex + 1} / {STEP_ORDER.length}
+            </p>
+
+            <h1 className={styles.prompt}>{step.prompt ?? step.text}</h1>
+
+            {/* 서버 message 그대로 표시 (api-spec §4). 부정적 통보 문구는 쓰지 않는다 (PRD §3.4) */}
+            {feedback && <p className={styles.feedback}>{feedback.message}</p>}
+
+            {proceeding ? (
+              // 판정 결과 proceed → 다음 단추 하나
+              <button type="button" className={styles.button} onClick={advance}>
+                다음
+              </button>
+            ) : step.choices ? (
+              // 선택지 단계. 판정 단계(warmup·main)는 서버로 제출, mood는 값만 기억하고 다음으로.
+              // retry면 이 분기로 다시 와서 선택지가 재활성화된다.
+              <div className={styles.choices}>
+                {step.choices.map((choice) => (
+                  <button
+                    key={choice}
+                    type="button"
+                    className={styles.button}
+                    disabled={submitting}
+                    onClick={
+                      judged
+                        ? () => onAnswer(step.question_id as number, choice)
+                        : () => onMoodChoice(choice)
+                    }
+                  >
+                    {choice}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              // 선택지 없는 단계(recall·mission)
+              <button
+                type="button"
+                className={styles.button}
+                disabled={submitting}
+                onClick={isLast ? finishSession : advance}
+              >
+                {isLast ? "오늘 마치기" : "다음"}
+              </button>
+            )}
+          </div>
+        )
       )}
     </AsyncBoundary>
   );
