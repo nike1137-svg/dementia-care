@@ -33,6 +33,10 @@ data/
 # ===== 도커 =====
 docker-compose.override.yml
 
+# ===== 백업 파일 (되돌리기는 git 이력으로) =====
+*.bak
+*.bak_*
+
 # ===== OS / 에디터 =====
 .DS_Store
 *~
