@@ -15,13 +15,15 @@
 | 구분 | 상태 |
 |---|---|
 | 앱 (Phase 0~7) | **전부 완료** — 프런트·FastAPI·SQLite·Docker·터널·Access·README |
-| 콘텐츠 | **12주 중 1주차만** — `content/questions-week1.json` (지남력, 5일치) |
+| 콘텐츠 | **12주 중 2주차까지** — `content/questions-week1.json`·`questions-week2.json` (지남력, 각 5일치) |
 | 서비스 | 데스크탑에서 가동 중. `care.dodami-ai.com` (Cloudflare Access 뒤) |
 | 컨테이너 | `web`·`api`·`cloudflared` 3개 모두 Up, 재시작 정책 `unless-stopped` |
-| 미검증 코드 | **없음.** 마지막 수정까지 실제 서비스에서 동작 확인 완료 |
+| 미검증 코드 | **있음.** day/week 순환 로직(`api/index.py`, 2026-08-16 노트북 작업)이 로컬(WSL)에서만 검증됐고 **데스크탑 운영 컨테이너엔 아직 배포 안 됨** — 배포 전 운영 DB 완료 기록 확인 필요(§6-2) |
 
-**서비스와 저장소가 일치한다.** 노트북에서 `git clone` 하면 지금 돌고 있는 것과 같은
-코드를 받는다. (2026-08-16 web 이미지 재빌드·배포 완료 기준)
+**서비스와 저장소가 어긋나 있다 (이번 항목에 한해).** 노트북에서 `git clone` 하면
+day/week 순환 로직·week2 콘텐츠가 포함된 최신 코드를 받지만, 데스크탑에서 지금
+가동 중인 컨테이너는 아직 이전 이미지(day1 고정)로 돌고 있다. 배포하려면 §5의
+재빌드 절차를 데스크탑에서 실행해야 한다.
 
 ## 2. 직전에 무슨 일이 있었나 — 반드시 읽을 것
 
@@ -85,7 +87,23 @@ cd ~/projects/dementia-care && git pull && sudo docker compose build web && sudo
 1. **web Dockerfile `RUN chown -R 1000:1000 /app` 개선** — 빌드 646초 중 **523초**를
    이 한 줄이 쓴다. `COPY --chown=1000:1000` 으로 옮기면 제거 가능. 노트북에서 빌드를
    자주 돌릴 거라면 이걸 먼저 하는 게 이득이다. 기능 영향 없음.
-2. **2주차 콘텐츠** — `content/questions-week2.json`.
-   `questions-week1.json` 과 같은 형식(`week`·`domain`·`levels` 1~3·`days` 5개)으로
-   파일만 추가하면 된다. 앱 코드는 건드릴 필요 없다.
+2. **2주차 콘텐츠 — 2026-08-16 완료.** `content/questions-week2.json` 추가.
+   ~~이 항목은 원래 "파일만 추가하면 된다, 앱 코드는 안 건드려도 된다"고 적혀
+   있었는데 틀린 서술이었다.~~ 실제로 열어보니 `api/index.py`가 `content/questions-week1.json`
+   파일명을 하드코딩하고, `/session/today`·`/complete`가 항상 `CONTENT["days"][0]`
+   (1일차)만 내보내고 있었다 — 몇 주가 지나도 day1만 반복 재생되는 상태였다. 그래서
+   이번에 `api/index.py`도 함께 고쳤다:
+   - `daily_completions` 완료 개수(N)로 `week`/`day`를 파생(`week=N//5+1`,
+     `day_index=N%5`) — DB 스키마 변경 없음, `content/questions-week*.json`을 전부
+     스캔해 없는 주차는 마지막 주차로 자동 clamp (`docs/api-spec.md` §3.1 참조).
+   - 덤으로 발견한 버그 2개도 같이 고침: ① `complete`의 미션 문구가 항상 day1
+     것만 나오던 버그, ② warmup 단계가 레벨과 무관하게 항상 "요일 4택" 보기만
+     만들어서 레벨 1(평일/주말 2택)·레벨 3(날짜 4택) 사용자는 **정답이 보기에
+     없어 워밍업을 통과할 수 없던** 버그. 후자는 day/week 순환과 무관하게
+     레벨 1(신규 유저 기본값)이면 항상 겪는 문제라 심각도가 높았다.
+   - 로컬(WSL, uvicorn+next dev 프록시 경유)에서 day1~5 순환, week1→week2 전환,
+     미션 문구, 워밍업 보기 전부 curl로 실측 검증 완료. 운영 컨테이너(데스크탑)
+     배포는 아직 안 함 — 배포 전 운영 DB에 기존 완료 기록이 있는지 확인 필요
+     (있으면 유저가 콘텐츠 진행 위치가 한 번 점프하는 정도의 UX 변화, 데이터
+     손실은 아님. 상세: `docs/decisions.md` 2026-08-16 항목).
 3. PRD §3.2 커리큘럼: 6영역 × 2주 = 1사이클, 13주차부터 난이도 올려 재순환.

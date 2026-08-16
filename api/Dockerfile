@@ -1,8 +1,8 @@
 # api/Dockerfile — FastAPI 백엔드
 #
 # ★ 빌드 컨텍스트는 저장소 루트(.)여야 한다, api/ 단독이 아니다.
-#   api/index.py가 content/questions-week1.json을 "../content"(parent.parent)
-#   상대경로로 읽는다 — content/가 api/의 형제 디렉터리로 이미지 안에도 그대로
+#   api/index.py가 content/questions-week*.json 전체를 "../content"(parent.parent)
+#   상대경로로 스캔한다 — content/가 api/의 형제 디렉터리로 이미지 안에도 그대로
 #   있어야 한다. docker-compose.yml(5-b)에서 반드시:
 #     build: { context: ., dockerfile: api/Dockerfile }
 #   로 지정한다.

@@ -1,0 +1,253 @@
+{
+  "_comment": "새록이 문항 은행 — 2주차(지남력, 계속). 이 파일은 서버(FastAPI)가 읽어 DB에 seed하는 원본이다. answer 필드는 절대 프런트로 내려보내지 않는다.",
+  "version": "1.0",
+  "created": "2026-08-16",
+  "week": 2,
+  "domain": "지남력",
+  "app_name": "새록이",
+  "tone": "친근한 존대 (~이에요/~예요). 명령형 금지. 재촉 금지.",
+
+  "answer_types": {
+    "static": "정답이 고정. answer 필드에 정답 문자열.",
+    "dynamic": "정답이 오늘 날짜에 따라 바뀜. 서버가 answer_rule로 보기와 정답을 생성. DB에 정답을 저장할 수 없음."
+  },
+
+  "levels": {
+    "1": "2택. 답이 뻔한 보기. 실패 경험 방지가 목적.",
+    "2": "4택 + 단서. 기본 난이도.",
+    "3": "4택, 단서 없음, 헷갈리는 보기. 타이핑 없음(어르신 제약)."
+  },
+
+  "common": {
+    "mood": {
+      "prompt": "안녕하세요, 새록이예요. 오늘 기분은 어떠세요?",
+      "choices": ["좋아요", "그저 그래요", "별로예요"],
+      "judged": false,
+      "_note": "첫 방문이 아니면 prompt를 '오늘 기분은 어떠세요?'로 짧게 해도 된다. 판정하지 않는다."
+    },
+
+    "warmup": {
+      "_note": "week1과 동일한 로직 (도메인이 같으므로 워밍업도 동일). 전부 dynamic — 서버가 오늘 날짜로 보기와 정답을 만든다.",
+      "1": {
+        "id": 2111,
+        "prompt": "오늘은 평일이에요, 주말이에요?",
+        "answer_type": "dynamic",
+        "answer_rule": "weekday_type",
+        "choices_rule": "fixed:['평일','주말']"
+      },
+      "2": {
+        "id": 2112,
+        "prompt": "오늘은 무슨 요일이에요?",
+        "answer_type": "dynamic",
+        "answer_rule": "weekday",
+        "choices_rule": "weekday_4 (정답 + 인접 요일 3개, 순서 섞기)"
+      },
+      "3": {
+        "id": 2113,
+        "prompt": "오늘은 몇 월 며칠이에요?",
+        "answer_type": "dynamic",
+        "answer_rule": "month_day",
+        "choices_rule": "date_4 (정답 + 앞뒤 며칠 3개, 순서 섞기)"
+      }
+    },
+
+    "messages": {
+      "correct": "맞아요, 잘하셨어요!",
+      "wrong_first": "비슷해요, 하나만 더 생각해볼까요?",
+      "wrong_second": "괜찮아요, 오늘은 여기까지도 잘하셨어요",
+      "_forbidden": ["틀렸습니다", "오답입니다", "다시 하세요", "정답은 ~입니다"],
+      "_note": "2차 오답에서도 정답을 알려주지 않는다. PRD §3.4."
+    }
+  },
+
+  "days": [
+    {
+      "day": 1,
+      "theme": "하루의 때",
+      "main": {
+        "1": {
+          "id": 2121,
+          "prompt": "해가 뜨면 아침이에요, 저녁이에요?",
+          "choices": ["아침", "저녁"],
+          "answer_type": "static",
+          "answer": "아침"
+        },
+        "2": {
+          "id": 2122,
+          "prompt": "점심을 먹는 때는 하루 중 언제예요?",
+          "choices": ["새벽", "낮", "밤", "저녁 늦게"],
+          "answer_type": "static",
+          "answer": "낮"
+        },
+        "3": {
+          "id": 2123,
+          "prompt": "지금은 하루 중 언제예요?",
+          "answer_type": "dynamic",
+          "answer_rule": "time_of_day",
+          "choices_rule": "fixed:['아침','낮','저녁','밤']"
+        }
+      },
+      "recall": {
+        "prompt": "예전엔 하루 중 어느 때를 제일 좋아하셨어요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "지금이 하루 중 언제인지 시계를 한번 보세요"
+      }
+    },
+
+    {
+      "day": 2,
+      "theme": "나이",
+      "main": {
+        "1": {
+          "id": 2221,
+          "prompt": "나이는 해가 지나면 늘어나요, 줄어들어요?",
+          "choices": ["늘어나요", "줄어들어요"],
+          "answer_type": "static",
+          "answer": "늘어나요"
+        },
+        "2": {
+          "id": 2222,
+          "prompt": "나이는 보통 몇 년에 한 살씩 늘어요?",
+          "choices": ["1년", "2년", "5년", "10년"],
+          "answer_type": "static",
+          "answer": "1년"
+        },
+        "3": {
+          "id": 2223,
+          "prompt": "새해가 되면 무엇이 하나씩 늘어요?",
+          "choices": ["나이", "계절", "요일", "달력"],
+          "answer_type": "static",
+          "answer": "나이",
+          "_note": "생년월일을 묻지 않는다 — 개인정보 수집 금지 원칙(PRD §5.1). 나이 개념 자체를 묻는 문항."
+        }
+      },
+      "recall": {
+        "prompt": "몇 살 때가 제일 기억에 남으세요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "가족 중 누군가의 나이를 한번 떠올려보세요"
+      }
+    },
+
+    {
+      "day": 3,
+      "theme": "국경일",
+      "main": {
+        "1": {
+          "id": 2321,
+          "prompt": "우리나라 국기 이름은 뭐예요?",
+          "choices": ["태극기", "무궁화"],
+          "answer_type": "static",
+          "answer": "태극기"
+        },
+        "2": {
+          "id": 2322,
+          "prompt": "한글을 만든 것을 기념하는 날은 언제예요?",
+          "choices": ["한글날", "삼일절", "광복절", "개천절"],
+          "answer_type": "static",
+          "answer": "한글날"
+        },
+        "3": {
+          "id": 2323,
+          "prompt": "광복절은 몇 월 며칠이에요?",
+          "choices": ["8월 15일", "3월 1일", "10월 3일", "10월 9일"],
+          "answer_type": "static",
+          "answer": "8월 15일",
+          "_note": "보기 넷 다 실제 국경일 날짜라 단서 없이 구분해야 함 → level 3."
+        }
+      },
+      "recall": {
+        "prompt": "태극기를 걸어두셨던 기억이 있으세요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "집에 태극기가 있는지 한번 찾아보세요"
+      }
+    },
+
+    {
+      "day": 4,
+      "theme": "방향",
+      "main": {
+        "1": {
+          "id": 2421,
+          "prompt": "해가 뜨는 쪽은 동쪽이에요, 서쪽이에요?",
+          "choices": ["동쪽", "서쪽"],
+          "answer_type": "static",
+          "answer": "동쪽"
+        },
+        "2": {
+          "id": 2422,
+          "prompt": "해가 지는 쪽은 어디예요?",
+          "choices": ["동쪽", "서쪽", "남쪽", "북쪽"],
+          "answer_type": "static",
+          "answer": "서쪽"
+        },
+        "3": {
+          "id": 2423,
+          "prompt": "나침반 바늘이 가리키는 쪽은 어디예요?",
+          "choices": ["북쪽", "남쪽", "동쪽", "서쪽"],
+          "answer_type": "static",
+          "answer": "북쪽",
+          "_note": "동서남북 넷 다 방향이라 단서 없이 구분해야 함 → level 3."
+        }
+      },
+      "recall": {
+        "prompt": "집 현관문은 어느 방향을 보고 있어요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "지금 창문이 어느 방향인지 한번 생각해보세요"
+      }
+    },
+
+    {
+      "day": 5,
+      "theme": "대중교통",
+      "main": {
+        "1": {
+          "id": 2521,
+          "prompt": "버스를 타려면 어디로 가야 해요?",
+          "choices": ["버스 정류장", "미용실"],
+          "answer_type": "static",
+          "answer": "버스 정류장"
+        },
+        "2": {
+          "id": 2522,
+          "prompt": "지하철을 타려면 어디로 가야 해요?",
+          "choices": ["지하철역", "약국", "빵집", "이발소"],
+          "answer_type": "static",
+          "answer": "지하철역"
+        },
+        "3": {
+          "id": 2523,
+          "prompt": "버스 요금을 낼 때 쓰는 카드는 뭐예요?",
+          "choices": ["교통카드", "신분증", "진료카드", "적립카드"],
+          "answer_type": "static",
+          "answer": "교통카드",
+          "_note": "보기 넷 다 실생활에서 쓰는 카드류라 단서 없이 구분해야 함 → level 3."
+        }
+      },
+      "recall": {
+        "prompt": "예전에 자주 타시던 교통수단이 있으세요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "집 앞에서 가까운 버스 정류장 방향을 한번 생각해보세요"
+      }
+    }
+  ],
+
+  "_design_notes": [
+    "지역 중립: 특정 지역 지명·사투리·지역 축제를 쓰지 않았다.",
+    "타이핑 없음: 모든 문항이 탭으로만 답할 수 있다. 자유 회상형(주관식)은 어르신 제약상 배제.",
+    "recall과 mood는 judged:false — 정답이 없다. 판정하지 않고 넘어간다.",
+    "dynamic 문항은 answer를 DB에 저장할 수 없다. 서버가 요청 시각 기준으로 계산한다.",
+    "day2(나이)는 생년월일을 묻지 않는다 — 개인정보 수집 금지 원칙. 나이의 개념만 다룬다.",
+    "week1과 주제가 겹치지 않게 설계: 요일/계절/달력/명절/동네(공공기관) → 하루때/나이/국경일/방향/대중교통.",
+    "id는 첫 자리를 주차 번호로 맞췄다 (2xxx) — week1(1xxx)과 겹치지 않아 문항 검색 시 혼동이 없다."
+  ]
+}

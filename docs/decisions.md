@@ -52,3 +52,64 @@ web 이미지를 재빌드해 배포한 뒤 실제 서비스에서 검증 완료
 
 **미조치(별건):** web Dockerfile의 `RUN chown -R 1000:1000 /app` 이 빌드 646초 중
 523초를 차지한다. `COPY --chown=` 으로 옮기면 제거 가능. 기능에는 영향 없다.
+
+## 2026-08-16 — 2주차 콘텐츠 작업 중 day/week 순환 로직을 처음 구현, 잠재 버그 2개 함께 발견·수정
+
+**발단.** `docs/handoff.md` §6-2는 "questions-week2.json 파일만 추가하면 된다, 앱
+코드는 안 건드려도 된다"고 적혀 있었다. 실제로 `api/index.py`를 열어보니 틀렸다 —
+`CONTENT_PATH`가 `content/questions-week1.json` 파일명을 하드코딩하고 있었고,
+`/session/today`·`/complete`는 항상 `CONTENT["days"][0]`(1일차)만 내보내고 있었다.
+즉 서비스가 몇 주째 돌아가고 있어도 항상 day1(요일) 콘텐츠만 반복 재생하는
+상태였다 — day1의 문항이 우연히 전부 static/고정 보기라 이 문제가 겉으로 드러나지
+않았을 뿐이다.
+
+**조치 1 — day/week 순환을 파생값으로 구현.** `daily_completions` 완료 개수(N)로
+`week = N // 5 + 1`, `day_index = N % 5`를 매 요청마다 계산(`resolve_progress`).
+DB 스키마 변경 없음 — `users.week` 컬럼은 두되(무해하게 방치, `docs/db-schema.md`
+갱신) 이 계산엔 안 쓴다. 콘텐츠 없는 주차는 마지막 주차로 clamp. 상세: `docs/api-spec.md` §3.1.
+
+**조치 2 — day rotation이 실제로 켜지자마자 드러난 기존 버그, 함께 수정.**
+1주차 콘텐츠만으로는 절대 드러날 수 없던(day1만 서비스했으므로) 잠재 버그 두 개를
+day2 이상을 실제로 서비스해보면서 발견했다:
+
+- **main 단계**: dynamic 문항(정답이 날짜에 따라 바뀜) 중 파일에 고정 `choices`
+  배열이 없고 `choices_rule` 서술만 있는 문항 5개(계절 이분법·모레 요일·이번
+  달·올해·하루의 때)에서, 보기 목록을 실제로 만드는 코드가 아예 없어 500 에러가
+  났다. 신규 유저는 day2(계절 문항)에서 바로 이걸 밟는다. → `build_dynamic_main_choices`
+  신설로 해결, day2 level1의 계절 예비 문항(봄·가을엔 `1_alt`로 대체) 로직도
+  이번에 처음 코드로 구현했다(파일 설계 노트엔 있었지만 구현된 적 없었음).
+- **warmup 단계**: 레벨과 무관하게 항상 "요일 4택" 보기만 만드는 `build_weekday_step`을
+  모든 레벨에 그대로 썼다. 레벨 1(기본값, "평일/주말" 2택)·레벨 3("몇 월 며칠" 4택)
+  사용자는 **프롬프트와 보기가 안 맞아 정답을 고를 수 없었다** — 실측으로 재현
+  확인(레벨1 신규 유저의 세션 첫 단계에서 발생, day/week 순환과 무관). 코드 주석에
+  "level 2 = dynamic 요일 문항"이라 적혀 있던 걸 보면, 레벨이 2로 고정됐던 시절
+  (2026-07-19 Phase 2-b 항목 참조)에 짠 채로 남아, 나중에 실제 레벨 조회로
+  바뀐 뒤에도(2026-07-20 Phase 4-c-1) 이 부분만 안 고쳐진 것으로 보인다.
+  → `build_dynamic_warmup_choices`로 레벨별 규칙(weekday_type/weekday/month_day)에
+  맞게 일반화, `build_weekday_step` 삭제.
+
+**검증.** 로컬(WSL) 루트 `.venv`의 uvicorn을 재기동해 curl로 확인: day1~5 전체
+순환, week1→week2 전환, `complete`의 미션 문구가 완료한 날짜와 일치(기존엔 항상
+day1 미션이었던 버그도 같이 해소됨), 레벨 1/2/3 각각의 warmup·main dynamic 문항
+보기가 정답을 포함해서 나오는지 전부 확인. Next.js(포트 3000) 프록시 경유로도
+동일 확인. 로컬 dev DB는 검증 후 삭제해 원상 복구(0행).
+
+**미배포.** 이 세션은 노트북(WSL) 개발 환경에서만 작업했다. 데스크탑 운영
+컨테이너는 아직 이전 코드(day1 고정 버전)로 돌고 있다. 배포 전에 운영 DB
+(`daily_completions`)에 기존 완료 기록이 있는지 확인 필요 — 있으면 그 유저는
+배포 즉시 완료 개수만큼 앞으로 건너뛴 날짜의 콘텐츠를 보게 된다(데이터 손실은
+아니고 콘텐츠 진행 위치가 한 번 점프하는 정도의 UX 변화).
+
+**발견한 사실(미조치) — 401 NO_USER_ID를 프런트가 복구하지 못한다.**
+`app/lib/userId.ts`의 `getOrCreateUserId()`는 `localStorage`에 `userId`가 이미
+있으면 그 값을 그대로 쓰고, **없을 때만** `POST /users`로 새로 발급한다. 서버가
+그 user_id를 모른다고 401 `NO_USER_ID`를 돌려줘도(예: 로컬 dev DB를 지우고 다시
+만든 경우, 또는 운영에서 SQLite 파일이 초기화되는 경우) 이 함수는 그 사실을
+알 방법이 없다 — `localStorage`엔 여전히 옛 user_id가 남아있기 때문이다.
+`app/session/page.tsx`(51~52행)는 `res.ok`가 아니면 그냥
+`throw new Error(session ${res.status})` 하고, `AsyncBoundary.tsx`의 에러
+화면은 "다시 해보기" 버튼으로 **같은 `loadSession()`을 다시 부른다** — 즉 같은
+(무효화된) user_id로 다시 요청해 또 401을 받는다. 화면이 완전히 멈추는 건
+아니지만(에러 화면 자체는 뜬다), **재시도해도 근본 원인(무효 user_id)이 고쳐지지
+않아 사실상 못 벗어난다.** 401을 받으면 `localStorage`를 지우고 새로 발급받는
+경로가 어디에도 없다. 이번 세션에서는 고치지 않는다 — 발견만 기록.

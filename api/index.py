@@ -5,10 +5,12 @@ api-spec §0.1: 브라우저는 /api/py/* 를 호출하고, Next.js rewrites가 
 
 Phase 2-b-1: 판정 없는 엔드포인트 3개 (users, session/today, history).
 Phase 2-b-2: 판정 있는 엔드포인트 2개 (answer, complete).
-             로직은 실제로 짜고 문항 데이터는 content/questions-week1.json 에서 읽는다.
+             로직은 실제로 짜고 문항 데이터는 content/questions-week*.json 에서 읽는다.
              answer(정답)·점수는 절대 응답에 넣지 않는다.
 Phase 4:     users·daily_completions·session_progress를 SQLite로 이관 완료.
              메모리에 남은 건 attempts(세션 내 시도 횟수, 의도적 유지)뿐이다.
+2주차:       day/week 순환을 daily_completions 완료 개수로 파생 (resolve_progress).
+             파일만 추가하면 새 주차가 자동 인식된다 (content_for_week).
 
 로컬 확인: uvicorn index:app --host 127.0.0.1 --port 8000
 """
@@ -36,9 +38,34 @@ logger = logging.getLogger("uvicorn.error")
 db.init_db()
 
 # ── 문항 데이터 (DB 대신 파일에서 로드) ────────────────────────────
-CONTENT_PATH = Path(__file__).resolve().parent.parent / "content" / "questions-week1.json"
-with CONTENT_PATH.open(encoding="utf-8") as f:
-    CONTENT = json.load(f)
+# content/questions-week*.json을 전부 스캔해 주차별로 적재한다. day/week 순환은
+# daily_completions 완료 개수로 파생하므로(resolve_progress), 파일만 추가하면
+# 새 주차가 자동으로 인식된다.
+CONTENT_DIR = Path(__file__).resolve().parent.parent / "content"
+
+
+def _load_content_by_week() -> dict[int, dict]:
+    by_week: dict[int, dict] = {}
+    for path in sorted(CONTENT_DIR.glob("questions-week*.json")):
+        with path.open(encoding="utf-8") as f:
+            data = json.load(f)
+        week = data["week"]
+        if week in by_week:
+            raise RuntimeError(f"주차 {week} 콘텐츠 파일이 중복됩니다: {path}")
+        by_week[week] = data
+    if not by_week:
+        raise RuntimeError("content/questions-week*.json 파일을 찾지 못했습니다")
+    return by_week
+
+
+CONTENT_BY_WEEK = _load_content_by_week()
+MAX_WEEK = max(CONTENT_BY_WEEK)
+
+
+def content_for_week(week: int) -> dict:
+    """요청한 주차 콘텐츠. 아직 파일이 없는 주차(커리큘럼이 더 준비되기 전)는
+    마지막 주차 콘텐츠를 반복한다 — 조용히 죽지 않게 하기 위한 의도된 fallback."""
+    return CONTENT_BY_WEEK.get(week, CONTENT_BY_WEEK[MAX_WEEK])
 
 # Mon=0 … Sun=6 (date.weekday()와 정렬)
 WEEKDAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
@@ -128,26 +155,16 @@ def derive_session_id(user_id: str, day: date) -> int:
     return int(h[:8], 16)
 
 
-def build_weekday_step(qid: int, prompt: str, today: date, session_id: int) -> dict:
-    """dynamic 요일 문항(level 2 warmup). 오늘 날짜로 정답+인접 요일 3개를 만들고
-    결정적으로 섞는다. 정답이 무엇인지는 응답에 넣지 않는다."""
-    idx = today.weekday()
-    correct = WEEKDAYS[idx]
-    neighbors = [WEEKDAYS[(idx + off) % 7] for off in (-1, 1, 2)]
-    choices = deterministic_shuffle([correct, *neighbors], session_id, qid)
-    return {"question_id": qid, "prompt": prompt, "choices": choices}
-
-
 # ── 판정 (api-spec §4) ────────────────────────────────────────────
-def find_question(question_id: int) -> dict | None:
-    """questions-week1.json 전체(모든 요일·레벨)에서 question_id로 문항 정의를 찾는다.
-    지금 /session/today가 실제로 내보내는 건 day1·level2뿐이지만, 판정 로직 자체는
-    파일에 있는 answer_rule 전 종류를 지원해야 하므로 전체를 뒤진다."""
-    for w in CONTENT["common"]["warmup"].values():
+def find_question(question_id: int, content: dict) -> dict | None:
+    """content(오늘 세션이 속한 주차 콘텐츠 하나)에서 question_id로 문항 정의를 찾는다.
+    호출부(submit_answer)가 항상 resolve_progress로 같은 주차를 다시 계산해 넘기므로
+    오늘 세션에 없는 question_id가 들어올 일은 없다."""
+    for w in content["common"]["warmup"].values():
         # "_note" 같은 설명용 문자열 키가 섞여 있어 dict인 것만 본다.
         if isinstance(w, dict) and w.get("id") == question_id:
             return w
-    for day in CONTENT["days"]:
+    for day in content["days"]:
         for q in day["main"].values():
             if isinstance(q, dict) and q.get("id") == question_id:
                 return q
@@ -169,9 +186,21 @@ def _next_season(season: str) -> str:
     return order[(order.index(season) + 1) % 4]
 
 
+def _time_of_day(hour: int) -> str:
+    if 5 <= hour < 11:
+        return "아침"
+    if 11 <= hour < 17:
+        return "낮"
+    if 17 <= hour < 21:
+        return "저녁"
+    return "밤"
+
+
 def compute_dynamic_answer(rule: str, today: date) -> str:
-    """dynamic 문항의 answer_rule대로 오늘 날짜 기준 정답을 서버가 계산한다
-    (questions-week1.json의 answer_rule 어휘 전부 지원)."""
+    """dynamic 문항의 answer_rule대로 오늘 날짜(시각) 기준 정답을 서버가 계산한다
+    (content/questions-week*.json에 쓰인 answer_rule 어휘 전부 지원)."""
+    if rule == "time_of_day":
+        return _time_of_day(datetime.now().hour)
     if rule == "weekday_type":
         return "주말" if today.weekday() >= 5 else "평일"
     if rule == "weekday":
@@ -198,6 +227,79 @@ def compute_dynamic_answer(rule: str, today: date) -> str:
         # 파일의 _note대로 봄·가을엔 이 문항 자체를 안 쓴다 (1224로 대체). 여기 온 건 이례적.
         raise ApiError(500, "INTERNAL_ERROR", "잠깐 문제가 생겼어요. 다시 해보세요")
     raise ApiError(500, "INTERNAL_ERROR", "잠깐 문제가 생겼어요. 다시 해보세요")
+
+
+def _weekday_neighbor_choices(idx: int) -> list[str]:
+    """idx(정답 요일의 WEEKDAYS 인덱스) 기준으로 정답+인접 요일 3개를 만든다
+    (weekday_4 규칙)."""
+    return [WEEKDAYS[idx], *(WEEKDAYS[(idx + off) % 7] for off in (-1, 1, 2))]
+
+
+def _date_neighbor_choices(today: date) -> list[str]:
+    """date_4 규칙: 정답(오늘) + 앞뒤 며칠 3개. 월·연도 경계는 timedelta가 처리한다."""
+    dates = [today, *(today + timedelta(days=o) for o in (-1, 1, 2))]
+    return [f"{d.month}월 {d.day}일" for d in dates]
+
+
+def _month_neighbor_choices(month: int) -> list[str]:
+    """month_4 규칙: 정답 + 인접 월 3개."""
+    idx0 = month - 1
+    neighbors = [(idx0 + off) % 12 + 1 for off in (-1, 1, 2)]
+    return [f"{month}월", *(f"{m}월" for m in neighbors)]
+
+
+def _year_neighbor_choices(year: int) -> list[str]:
+    """year_4 규칙: 정답 + 앞뒤 연도 3개."""
+    return [f"{year}년", *(f"{year + off}년" for off in (-1, 1, 2))]
+
+
+def build_dynamic_main_choices(question: dict, today: date) -> list[str]:
+    """main 단계 dynamic 문항(파일에 고정 choices가 없고 choices_rule만 있는 경우)의
+    보기 목록을 만든다. compute_dynamic_answer가 계산하는 정답과 항상 같은 어휘를
+    쓰므로 정답이 이 목록 밖에 있을 일이 없다. 호출부에서 deterministic_shuffle로
+    섞는다 (여기서는 섞지 않은 원본 순서로 반환)."""
+    rule = question["answer_rule"]
+    if rule == "season_temp":
+        return ["더운 계절", "추운 계절"]
+    if rule == "time_of_day":
+        return ["아침", "낮", "저녁", "밤"]
+    if rule.startswith("weekday_offset:"):
+        offset = int(rule.split(":", 1)[1])
+        return _weekday_neighbor_choices((today.weekday() + offset) % 7)
+    if rule == "month":
+        return _month_neighbor_choices(today.month)
+    if rule == "year":
+        return _year_neighbor_choices(today.year)
+    raise ApiError(500, "INTERNAL_ERROR", "잠깐 문제가 생겼어요. 다시 해보세요")
+
+
+def build_dynamic_warmup_choices(rule: str, today: date) -> list[str]:
+    """warmup 단계는 레벨별로 answer_rule이 다르다(1=weekday_type 2택, 2=weekday
+    4택, 3=month_day 4택). 예전엔 레벨이 2로 고정돼 있어서(decisions.md 2026-07-19)
+    weekday 전용 함수 하나로 충분했는데, 실제 레벨 조회로 바뀐 뒤에도 이 부분만
+    안 고쳐져 레벨 1·3에서 프롬프트와 안 맞는 보기(정답이 보기에 없음)가 나가는
+    버그가 있었다 — 이번에 발견해서 규칙별로 분기하도록 고친다."""
+    if rule == "weekday_type":
+        return ["평일", "주말"]
+    if rule == "weekday":
+        return _weekday_neighbor_choices(today.weekday())
+    if rule == "month_day":
+        return _date_neighbor_choices(today)
+    raise ApiError(500, "INTERNAL_ERROR", "잠깐 문제가 생겼어요. 다시 해보세요")
+
+
+def select_main_question(day: dict, level: int, today: date) -> dict:
+    """day['main'][level] 을 고르되, day2 level1(계절 이분법 season_temp)은 봄·가을엔
+    성립하지 않아 예비 문항(f"{level}_alt")으로 대체한다 (파일 _note, PRD 설계 그대로).
+    다른 day/level은 그냥 원래 항목을 쓴다."""
+    key = str(level)
+    item = day["main"][key]
+    if item.get("answer_type") == "dynamic" and item.get("answer_rule") == "season_temp":
+        season = _season_of(today.month)
+        alt_key = f"{key}_alt"
+        if season in ("봄", "가을") and alt_key in day["main"]:
+            return day["main"][alt_key]
+    return item
 
 
 def judge(question: dict, response: str, today: date) -> bool:
@@ -271,6 +373,22 @@ def get_completed_dates(user_id: str) -> set[str]:
     return {row["date"] for row in rows}
 
 
+def resolve_progress(user_id: str) -> tuple[int, int, dict]:
+    """이 유저가 오늘 봐야 할 (week_number, day_index, content) 를 파생한다.
+
+    daily_completions에 쌓인 '완료한 총 일수'(N)만으로 계산한다 — 별도 컬럼에
+    저장하지 않는다. users.week 컬럼(db-schema.md)이 있지만 이 계산에는 쓰지
+    않는다: streak_days를 daily_completions에서 매번 세는 것과 같은 이유로,
+    저장된 카운터는 갱신을 빠뜨리면 어긋나지만 파생값은 항상 맞는다.
+
+    N=0(첫 세션)이면 week1의 day1. 5일 완료할 때마다 다음 주차로 넘어간다.
+    아직 콘텐츠 파일이 없는 주차는 content_for_week가 마지막 주차로 clamp한다."""
+    total_completed = len(get_completed_dates(user_id))
+    week_number = total_completed // 5 + 1
+    day_index = total_completed % 5
+    return week_number, day_index, content_for_week(week_number)
+
+
 def compute_streak_days(completed_dates: set[str], today: date) -> int:
     """오늘부터 거꾸로 세어 연속으로 완료한 날 수. 하루라도 빠지면 그 자리에서 멈춘다."""
     streak = 0
@@ -337,11 +455,13 @@ def create_user():
 
 @app.get("/session/today")
 def session_today(user_id: str = Depends(require_user_id)):
-    # §3. day 1 문항을 파일에서 읽어 5단계 구성. answer 절대 미포함.
+    # §3. 완료 개수로 파생한 오늘의 day/week 문항을 파일에서 읽어 5단계 구성.
+    # answer 절대 미포함.
     today = date.today()
     session_id = derive_session_id(user_id, today)
-    day = CONTENT["days"][0]
-    common = CONTENT["common"]
+    week_number, day_index, content = resolve_progress(user_id)
+    day = content["days"][day_index]
+    common = content["common"]
     level = get_user_level(user_id)
 
     # mood: 판정 없음 + 정서 척도(좋아요→별로예요)라 순서 유지 (셔플 안 함)
@@ -350,16 +470,25 @@ def session_today(user_id: str = Depends(require_user_id)):
         "choices": list(common["mood"]["choices"]),
     }
 
-    # warmup(level 2 = dynamic 요일 문항): 오늘 날짜로 생성 + 결정적 셔플
+    # warmup: 레벨별 answer_rule에 맞는 보기를 만들어 결정적 셔플.
     w = common["warmup"][str(level)]
-    warmup = build_weekday_step(w["id"], w["prompt"], today, session_id)
+    warmup_choices = build_dynamic_warmup_choices(w["answer_rule"], today)
+    warmup = {
+        "question_id": w["id"],
+        "prompt": w["prompt"],
+        "choices": deterministic_shuffle(warmup_choices, session_id, w["id"]),
+    }
 
-    # main(level 2 = static): 파일 choices를 결정적 셔플, answer 제거
-    m = day["main"][str(level)]
+    # main: static이면 파일 choices 그대로, dynamic이면 규칙대로 생성. 둘 다 결정적 셔플.
+    m = select_main_question(day, level, today)
+    if "choices" in m:
+        main_choices = m["choices"]
+    else:
+        main_choices = build_dynamic_main_choices(m, today)
     main = {
         "question_id": m["id"],
         "prompt": m["prompt"],
-        "choices": deterministic_shuffle(m["choices"], session_id, m["id"]),
+        "choices": deterministic_shuffle(main_choices, session_id, m["id"]),
     }
 
     # recall: 판정 없는 회상 질문 (question_id 없음)
@@ -369,8 +498,8 @@ def session_today(user_id: str = Depends(require_user_id)):
     return {
         "session_id": session_id,
         "date": today.isoformat(),
-        "week": CONTENT["week"],
-        "domain": CONTENT["domain"],
+        "week": content["week"],
+        "domain": content["domain"],
         "level": level,
         "completed": False,
         "steps": {
@@ -399,7 +528,10 @@ def history(user_id: str = Depends(require_user_id)):
             {
                 "date": d.isoformat(),
                 "completed": done,
-                "domain": CONTENT["domain"] if done else None,
+                # 지금까지(1~2주차)는 도메인 전환이 없어 1주차 파일 기준으로 고정.
+                # 3주차 이후 다른 도메인 콘텐츠가 생기면 날짜별 실제 도메인을
+                # 추적하도록 재검토 필요 (지금은 과잉설계 방지 차원에서 보류).
+                "domain": CONTENT_BY_WEEK[1]["domain"] if done else None,
             }
         )
     return {"streak_days": streak_days, "days": days}
@@ -412,7 +544,11 @@ def submit_answer(
     user_id: str = Depends(require_user_id),
 ):
     # §4. warmup·main만 호출. 정답 값은 응답에 절대 넣지 않는다 (§3.4/§0.5).
-    question = find_question(body.question_id)
+    # 오늘 세션과 동일한 계산식(resolve_progress)으로 이 유저의 주차 콘텐츠를 다시
+    # 구해서 그 안에서만 문항을 찾는다 — /session/today가 내준 문항과 항상 같은
+    # 주차를 보게 되므로 어긋날 일이 없다.
+    _week_number, _day_index, content = resolve_progress(user_id)
+    question = find_question(body.question_id, content)
     if question is None:
         raise ApiError(404, "QUESTION_NOT_FOUND", "문항을 찾지 못했어요")
 
@@ -421,7 +557,7 @@ def submit_answer(
     _attempts[key] = attempt
 
     correct = judge(question, body.response, date.today())
-    messages = CONTENT["common"]["messages"]
+    messages = content["common"]["messages"]
 
     if correct:
         # 1차든 2차 시도든, 맞으면 성공 — 재시도 규칙과 무관하게 바로 통과.
@@ -459,6 +595,12 @@ def complete_session(
     user_id: str = Depends(require_user_id),
 ):
     today = date.today()
+    # 오늘 완료를 기록하기 '전' 상태로 오늘 세션의 day/week를 파생한다 — 완료를
+    # 먼저 기록해버리면 N이 1 늘어나 다음 날 것을 계산하게 되므로 순서가 중요하다
+    # (기존 버그: 미션이 항상 day1 것만 나왔다 — CONTENT["days"][0] 하드코딩 때문).
+    _week_number, day_index, content = resolve_progress(user_id)
+    mission = content["days"][day_index]["mission"]["text"]
+
     # 오늘 완료를 daily_completions에 기록 (같은 날 재완료는 409 ALREADY_COMPLETED).
     record_completion(user_id, today)
 
@@ -483,7 +625,6 @@ def complete_session(
     # streak_days: daily_completions에서 실제 집계 (Phase 4-c-2, 고정 샘플 제거).
     completed_dates = get_completed_dates(user_id)
     streak_days = compute_streak_days(completed_dates, today)
-    mission = CONTENT["days"][0]["mission"]["text"]
     message = (
         f"{streak_days}일째 연속이에요. 대단하세요!"
         if streak_days > 1

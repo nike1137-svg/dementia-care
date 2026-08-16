@@ -15,7 +15,7 @@
 |---|---|---|---|
 | `user_id` | TEXT | PRIMARY KEY | 익명 UUID (api-spec §0.3) |
 | `level` | INTEGER | 기본 1 | 현재 난이도 1~3 |
-| `week` | INTEGER | 기본 1 | 커리큘럼 주차 |
+| `week` | INTEGER | 기본 1 | ~~커리큘럼 주차~~ — **2026-08-16부터 코드가 읽지 않음**. day/week 순환을 `daily_completions` 완료 개수로 파생하는 방식(§2.1과 같은 원칙, api-spec §3.1)으로 바꾸면서 이 컬럼은 생성 시 1로만 쓰이고 방치된다. 컬럼 삭제(`ALTER TABLE ... DROP COLUMN`) 마이그레이션을 새로 만드는 리스크를 피하려 무해하게 남겨둠 |
 | `created_at` | TEXT | | ISO 8601 시각 |
 
 ### 1.2 `daily_completions` (도장판 — A 방식)
@@ -56,7 +56,7 @@
 - Phase 2-b-2에서 이미 프로세스 메모리(`_attempts: dict[(session_id, question_id), int]`)로 검증된 로직이 있다 — DB로 옮기면 "언제 지우나"(세션 종료 시점 정리 코드)를 새로 짜야 하고, 그 정리 로직 자체가 버그 소지가 된다
 - **결론**: attempts는 계속 메모리에 둔다. 서버 재시작하면 초기화되는 것도 문제 없다 (진행 중이던 문항 재시도 상태일 뿐, 사용자 식별 데이터가 아님)
 
-### 2.3 문항 데이터는 계속 파일(`content/questions-week1.json`)
+### 2.3 문항 데이터는 계속 파일(`content/questions-week*.json`, 주차별)
 
 - 문항 문구·정답·`answer_rule`은 **콘텐츠**지 사용자 데이터가 아니다 — 안 변한다(마커스님이 확정한 문항 은행)
 - Phase 2-b에서 이미 검증된 로직(`find_question`, `compute_dynamic_answer`, 결정적 셔플)이 파일 구조를 전제로 짜여 있다 — DB 테이블로 옮기면 이 검증된 코드를 다시 짜야 하고 얻는 이득이 없다
