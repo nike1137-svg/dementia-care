@@ -389,6 +389,22 @@ def resolve_progress(user_id: str) -> tuple[int, int, dict]:
     return week_number, day_index, content_for_week(week_number)
 
 
+def domains_by_date(completed_dates: set[str]) -> dict[str, str]:
+    """완료한 날짜별로 '그날 무슨 영역을 했는지'를 파생한다 (도장판 §6용).
+
+    daily_completions에는 영역 컬럼이 없다. 그래도 알 수 있다 — resolve_progress가
+    '완료 개수 N'으로 주차를 정하므로, 날짜순으로 i번째(0-based) 완료는 그날 N=i
+    였다는 뜻이고 곧 week = i//5+1 이다. 같은 식을 쓰니 세션이 실제로 내준 영역과
+    항상 일치한다. ISO 날짜 문자열은 사전순 정렬이 곧 시간순이다.
+
+    3주차(주의·집중)를 넣기 전까지는 영역 전환 자체가 없어 1주차 영역으로 고정돼
+    있었다. 이제 전환이 생겨 실제 영역을 돌려준다."""
+    return {
+        d: content_for_week(i // 5 + 1)["domain"]
+        for i, d in enumerate(sorted(completed_dates))
+    }
+
+
 def compute_streak_days(completed_dates: set[str], today: date) -> int:
     """오늘부터 거꾸로 세어 연속으로 완료한 날 수. 하루라도 빠지면 그 자리에서 멈춘다."""
     streak = 0
@@ -520,6 +536,8 @@ def history(user_id: str = Depends(require_user_id)):
     completed_dates = get_completed_dates(user_id)
     streak_days = compute_streak_days(completed_dates, today)
 
+    domain_by_date = domains_by_date(completed_dates)
+
     days = []
     for i in range(7):
         d = today - timedelta(days=6 - i)
@@ -528,10 +546,7 @@ def history(user_id: str = Depends(require_user_id)):
             {
                 "date": d.isoformat(),
                 "completed": done,
-                # 지금까지(1~2주차)는 도메인 전환이 없어 1주차 파일 기준으로 고정.
-                # 3주차 이후 다른 도메인 콘텐츠가 생기면 날짜별 실제 도메인을
-                # 추적하도록 재검토 필요 (지금은 과잉설계 방지 차원에서 보류).
-                "domain": CONTENT_BY_WEEK[1]["domain"] if done else None,
+                "domain": domain_by_date.get(d.isoformat()) if done else None,
             }
         )
     return {"streak_days": streak_days, "days": days}

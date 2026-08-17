@@ -15,13 +15,22 @@
 | 구분 | 상태 |
 |---|---|
 | 앱 (Phase 0~7) | **전부 완료** — 프런트·FastAPI·SQLite·Docker·터널·Access·README |
-| 콘텐츠 | **12주 중 2주차까지** — `content/questions-week1.json`·`questions-week2.json` (지남력, 각 5일치) |
+| 콘텐츠 | **12주 중 3주차까지** — `questions-week1·2.json`(지남력), `questions-week3.json`(주의·집중). 각 5일치 |
 | 서비스 | 데스크탑에서 가동 중. `care.dodami-ai.com` (Cloudflare Access 뒤) |
 | 컨테이너 | `web`·`api`·`cloudflared` 3개 모두 Up, 재시작 정책 `unless-stopped` |
-| 미검증 코드 | **없음.** day/week 순환 로직은 2026-08-17 데스크탑에 배포하고 운영 서비스에서 실측 검증 완료 |
+| 미배포 코드 | **있다 (아래 §1-1).** 3주차 콘텐츠 + `/history` domain 수정 + web Dockerfile 최적화 |
 
-**서비스와 저장소가 일치한다.** 노트북에서 `git clone` 하면 지금 돌고 있는 것과 같은
-코드를 받는다. (2026-08-17 api 이미지 재빌드·배포 완료 기준)
+> **§1-1. 커밋됐지만 아직 운영에 안 올라간 것 (2026-08-17 데스크탑 세션)**
+>
+> | 커밋 | 내용 | 검증 상태 |
+> |---|---|---|
+> | `9910e2b` | web Dockerfile `chown -R` → `COPY --chown` (빌드 523초 단축) | **빌드 미검증** — `sudo docker compose build web` 필요 |
+> | (콘텐츠) | `content/questions-week3.json` + `/history` domain 파생 수정 | 로컬 HTTP 실측 완료. **운영 미배포** |
+>
+> 배포하려면 `api` 이미지 재빌드(콘텐츠·`index.py` 변경분), Dockerfile 검증까지
+> 하려면 `web` 도 재빌드해야 한다. 명령은 §5.
+
+**저장소가 서비스보다 앞서 있다.** 위 §1-1을 배포하면 다시 일치한다.
 
 ## 2. 직전에 무슨 일이 있었나 — 반드시 읽을 것
 
@@ -82,9 +91,14 @@ cd ~/projects/dementia-care && git pull && sudo docker compose build web && sudo
 
 ## 6. 다음 할 일
 
-1. **web Dockerfile `RUN chown -R 1000:1000 /app` 개선** — 빌드 646초 중 **523초**를
-   이 한 줄이 쓴다. `COPY --chown=1000:1000` 으로 옮기면 제거 가능. 노트북에서 빌드를
-   자주 돌릴 거라면 이걸 먼저 하는 게 이득이다. 기능 영향 없음.
+1. **web Dockerfile `RUN chown -R 1000:1000 /app` 개선 — 2026-08-17 코드 수정 완료
+   (커밋 `9910e2b`), 빌드 검증 대기.** `COPY --chown=1000:1000` 으로 옮겼다. 빌드
+   646초 중 523초를 쓰던 줄이라 120초 안팎을 기대한다. **아직 실제로 빌드해보지
+   않았다** — `sudo docker compose build web` 이 통과하는지, 시간이 실제로 줄었는지
+   확인이 남았다. 컨테이너는 `read_only:true` 에 `/app/.next/cache` 만 tmpfs 라
+   `/app` 에 쓰기 경로가 없어 소유권이 실행에 영향을 주지 않는다(확인함).
+   `api/Dockerfile` 의 같은 `chown` 은 **건드리지 않았다** — DB 볼륨 권한 때문에
+   의도적으로 넣은 것이고(커밋 `d42541f`) api 재빌드는 43초라 문제가 아니다.
 2. **2주차 콘텐츠 — 2026-08-16 완료.** `content/questions-week2.json` 추가.
    ~~이 항목은 원래 "파일만 추가하면 된다, 앱 코드는 안 건드려도 된다"고 적혀
    있었는데 틀린 서술이었다.~~ 실제로 열어보니 `api/index.py`가 `content/questions-week1.json`
@@ -105,4 +119,13 @@ cd ~/projects/dementia-care && git pull && sudo docker compose build web && sudo
      각각 N=3·2 — 둘 다 week1 내(day4·day3)라 주차 점프 없음. `api` 이미지만
      재빌드(43초)해 반영했고, 실제 서비스에서 워밍업 통과·day4 문항·day4 미션
      문구("가족한테 안부 한마디 남겨보세요")·streak 2일을 확인했다.
-3. PRD §3.2 커리큘럼: 6영역 × 2주 = 1사이클, 13주차부터 난이도 올려 재순환.
+3. **3주차 콘텐츠 — 2026-08-17 완료 (운영 미배포).** `content/questions-week3.json`
+   (주의·집중, 5일치 × 3레벨). main 문항을 전부 `static` 으로 짜서 **문항 관련 서버
+   코드는 한 줄도 안 바뀌었다.** 다만 3주차가 **처음으로 영역을 바꾸는 주차**라
+   `/history` 의 `domain` 하드코딩이 드러나 같이 고쳤다 (`domains_by_date`, DB 스키마
+   변경 없음). 근거·검증 범위는 `docs/decisions.md` 2026-08-17 두 번째 항목.
+4. **4주차 콘텐츠** — PRD §3.2상 4주차도 '주의·집중'이다. 파일이 없으면 3주차가
+   반복된다(의도된 fallback이라 사고는 아니다). 3주차 파일을 본떠 `questions-week4.json`
+   을 만들면 되고, **서버 코드는 안 건드려도 된다** — 단, 5주차(기억력)로 넘어갈 때
+   지연 회상 과제가 탭 전용 제약과 맞는지는 별도 설계 판단이 필요하다.
+5. PRD §3.2 커리큘럼: 6영역 × 2주 = 1사이클, 13주차부터 난이도 올려 재순환.
