@@ -1,0 +1,370 @@
+{
+  "_comment": "새록이 문항 은행 — 5주차(기억력). Spaced Retrieval 일정이다. 설계 근거는 docs/week5-memory-design.md. answer 필드는 절대 프런트로 내려보내지 않는다.",
+  "version": "1.0",
+  "created": "2026-08-17",
+  "week": 5,
+  "domain": "기억력",
+  "app_name": "새록이",
+  "tone": "친근한 존대 (~이에요/~예요). 명령형 금지. 재촉 금지.",
+  "answer_types": {
+    "static": "정답이 고정. answer 필드에 정답 문자열.",
+    "dynamic": "정답이 오늘 날짜에 따라 바뀜. 서버가 answer_rule로 보기와 정답을 생성. DB에 정답을 저장할 수 없음."
+  },
+  "levels": {
+    "1": "2택. 답이 뻔한 보기. 실패 경험 방지가 목적.",
+    "2": "4택 + 단서. 기본 난이도.",
+    "3": "4택, 단서 없음, 헷갈리는 보기. 타이핑 없음(어르신 제약)."
+  },
+  "srt_schedule": {
+    "_note": "부호화(encode) → 간격을 늘려가며 인출(retrieve). day는 완료 순서라 달력이 아니므로 문구는 '지난번/전에'로 쓴다. 검증 스크립트가 이 표와 문항을 대조한다.",
+    "items": [
+      {
+        "key": "A",
+        "category": "꽃",
+        "target": "진달래",
+        "distractors": [
+          "개나리",
+          "국화",
+          "코스모스"
+        ],
+        "encode_day": 1,
+        "retrieve_days": [
+          2,
+          5
+        ]
+      },
+      {
+        "key": "B",
+        "category": "부엌 물건",
+        "target": "주전자",
+        "distractors": [
+          "냄비",
+          "항아리",
+          "바가지"
+        ],
+        "encode_day": 3,
+        "retrieve_days": [
+          4
+        ]
+      }
+    ]
+  },
+  "common": {
+    "mood": {
+      "prompt": "안녕하세요, 새록이예요. 오늘 기분은 어떠세요?",
+      "choices": [
+        "좋아요",
+        "그저 그래요",
+        "별로예요"
+      ],
+      "judged": false,
+      "_note": "첫 방문이 아니면 prompt를 '오늘 기분은 어떠세요?'로 짧게 해도 된다. 판정하지 않는다."
+    },
+    "warmup": {
+      "_note": "워밍업은 주차와 무관하게 항상 지남력이다 (PRD §3.1 ② — 오늘 날짜·요일). 3주차부터 주 영역은 주의·집중으로 바뀌지만 워밍업은 그대로다. 전부 dynamic — 서버가 오늘 날짜로 보기와 정답을 만든다.",
+      "1": {
+        "id": 5111,
+        "prompt": "오늘은 평일이에요, 주말이에요?",
+        "answer_type": "dynamic",
+        "answer_rule": "weekday_type",
+        "choices_rule": "fixed:['평일','주말']"
+      },
+      "2": {
+        "id": 5112,
+        "prompt": "오늘은 무슨 요일이에요?",
+        "answer_type": "dynamic",
+        "answer_rule": "weekday",
+        "choices_rule": "weekday_4 (정답 + 인접 요일 3개, 순서 섞기)"
+      },
+      "3": {
+        "id": 5113,
+        "prompt": "오늘은 몇 월 며칠이에요?",
+        "answer_type": "dynamic",
+        "answer_rule": "month_day",
+        "choices_rule": "date_4 (정답 + 앞뒤 며칠 3개, 순서 섞기)"
+      }
+    },
+    "messages": {
+      "correct": "맞아요, 잘하셨어요!",
+      "wrong_first": "비슷해요, 하나만 더 생각해볼까요?",
+      "wrong_second": "괜찮아요, 오늘은 여기까지도 잘하셨어요",
+      "_forbidden": [
+        "틀렸습니다",
+        "오답입니다",
+        "다시 하세요",
+        "정답은 ~입니다"
+      ],
+      "_note": "2차 오답에서도 정답을 알려주지 않는다. PRD §3.4."
+    }
+  },
+  "days": [
+    {
+      "day": 1,
+      "theme": "기억해둘 것 — 꽃",
+      "srt_item": "A",
+      "main": {
+        "1": {
+          "id": 5121,
+          "prompt": "다음 중 꽃은 무엇일까요?",
+          "choices": [
+            "진달래",
+            "의자"
+          ],
+          "answer_type": "static",
+          "answer": "진달래",
+          "srt_role": "encode"
+        },
+        "2": {
+          "id": 5122,
+          "prompt": "다음 중 꽃은 무엇일까요?",
+          "choices": [
+            "진달래",
+            "의자",
+            "신발",
+            "우산"
+          ],
+          "answer_type": "static",
+          "answer": "진달래",
+          "srt_role": "encode"
+        },
+        "3": {
+          "id": 5123,
+          "prompt": "다음 중 꽃은 무엇일까요?",
+          "choices": [
+            "진달래",
+            "거울",
+            "빗자루",
+            "지팡이"
+          ],
+          "answer_type": "static",
+          "answer": "진달래",
+          "srt_role": "encode"
+        }
+      },
+      "recall": {
+        "prompt": "예전에 집 근처에 피던 꽃이 있었어요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "오늘 '진달래'를 한 번 떠올려보세요"
+      }
+    },
+    {
+      "day": 2,
+      "theme": "지난번 그 꽃",
+      "srt_item": "A",
+      "main": {
+        "1": {
+          "id": 5221,
+          "prompt": "지난번에 나온 꽃은 무엇이었죠?",
+          "choices": [
+            "진달래",
+            "개나리"
+          ],
+          "answer_type": "static",
+          "answer": "진달래",
+          "srt_role": "retrieve"
+        },
+        "2": {
+          "id": 5222,
+          "prompt": "지난번에 나온 꽃은 무엇이었죠? (봄에 피는 것이었어요)",
+          "choices": [
+            "진달래",
+            "개나리",
+            "국화",
+            "코스모스"
+          ],
+          "answer_type": "static",
+          "answer": "진달래",
+          "srt_role": "retrieve"
+        },
+        "3": {
+          "id": 5223,
+          "prompt": "지난번에 기억해두신 것은 무엇이었죠?",
+          "choices": [
+            "진달래",
+            "개나리",
+            "국화",
+            "코스모스"
+          ],
+          "answer_type": "static",
+          "answer": "진달래",
+          "srt_role": "retrieve"
+        }
+      },
+      "recall": {
+        "prompt": "그 꽃을 보면 어떤 때가 떠오르세요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "창밖에 꽃이나 나무가 보이는지 한번 보세요"
+      }
+    },
+    {
+      "day": 3,
+      "theme": "기억해둘 것 — 부엌 물건",
+      "srt_item": "B",
+      "main": {
+        "1": {
+          "id": 5321,
+          "prompt": "다음 중 부엌에서 쓰는 것은 무엇일까요?",
+          "choices": [
+            "주전자",
+            "신발"
+          ],
+          "answer_type": "static",
+          "answer": "주전자",
+          "srt_role": "encode"
+        },
+        "2": {
+          "id": 5322,
+          "prompt": "다음 중 부엌에서 쓰는 것은 무엇일까요?",
+          "choices": [
+            "주전자",
+            "신발",
+            "우산",
+            "베개"
+          ],
+          "answer_type": "static",
+          "answer": "주전자",
+          "srt_role": "encode"
+        },
+        "3": {
+          "id": 5323,
+          "prompt": "다음 중 부엌에서 쓰는 것은 무엇일까요?",
+          "choices": [
+            "주전자",
+            "빗자루",
+            "지팡이",
+            "부채"
+          ],
+          "answer_type": "static",
+          "answer": "주전자",
+          "srt_role": "encode"
+        }
+      },
+      "recall": {
+        "prompt": "예전에 쓰시던 부엌 살림 중 기억나는 게 있으세요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "오늘 '주전자'를 한 번 떠올려보세요"
+      }
+    },
+    {
+      "day": 4,
+      "theme": "지난번 그 물건",
+      "srt_item": "B",
+      "main": {
+        "1": {
+          "id": 5421,
+          "prompt": "지난번에 나온 부엌 물건은 무엇이었죠?",
+          "choices": [
+            "주전자",
+            "냄비"
+          ],
+          "answer_type": "static",
+          "answer": "주전자",
+          "srt_role": "retrieve"
+        },
+        "2": {
+          "id": 5422,
+          "prompt": "지난번에 나온 부엌 물건은 무엇이었죠? (물을 끓이던 것이었어요)",
+          "choices": [
+            "주전자",
+            "냄비",
+            "항아리",
+            "바가지"
+          ],
+          "answer_type": "static",
+          "answer": "주전자",
+          "srt_role": "retrieve"
+        },
+        "3": {
+          "id": 5423,
+          "prompt": "지난번에 기억해두신 물건은 무엇이었죠?",
+          "choices": [
+            "주전자",
+            "냄비",
+            "항아리",
+            "바가지"
+          ],
+          "answer_type": "static",
+          "answer": "주전자",
+          "srt_role": "retrieve"
+        }
+      },
+      "recall": {
+        "prompt": "예전에 부엌에서 가장 자주 쓰시던 게 뭐였어요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "부엌에서 가장 오래 쓴 물건을 한번 찾아보세요"
+      }
+    },
+    {
+      "day": 5,
+      "theme": "다시 그 꽃",
+      "srt_item": "A",
+      "main": {
+        "1": {
+          "id": 5521,
+          "prompt": "전에 나온 꽃은 무엇이었죠?",
+          "choices": [
+            "진달래",
+            "개나리"
+          ],
+          "answer_type": "static",
+          "answer": "진달래",
+          "srt_role": "retrieve"
+        },
+        "2": {
+          "id": 5522,
+          "prompt": "전에 나온 꽃은 무엇이었죠? (봄에 피는 것이었어요)",
+          "choices": [
+            "진달래",
+            "개나리",
+            "국화",
+            "코스모스"
+          ],
+          "answer_type": "static",
+          "answer": "진달래",
+          "srt_role": "retrieve"
+        },
+        "3": {
+          "id": 5523,
+          "prompt": "처음에 기억해두신 것은 무엇이었죠?",
+          "choices": [
+            "진달래",
+            "개나리",
+            "국화",
+            "코스모스"
+          ],
+          "answer_type": "static",
+          "answer": "진달래",
+          "srt_role": "retrieve"
+        }
+      },
+      "recall": {
+        "prompt": "봄에 꽃구경 가시던 기억이 있으세요?",
+        "judged": false
+      },
+      "mission": {
+        "text": "좋아하시는 꽃 이름을 하나 떠올려보세요"
+      }
+    }
+  ],
+  "_design_notes": [
+    "PRD §3.2-1: 5~6주차는 '지연 회상'이 아니라 '단서 회상'이다. 탭 전용 제약과 자유 회상은 양립 불가.",
+    "Spaced Retrieval: 하루 한 세션이라 세션 간격이 곧 인출 간격이다. A는 day1 부호화 → day2(1세션) → day5(3세션)로 간격을 넓힌다.",
+    "통제된 부호화(FCSRT): 항목을 그냥 보여주지 않고 범주로 찾아내게 해서 의미 처리를 강제한다. 그 행위가 곧 탭 문항이라 별도 단계가 필요 없다.",
+    "★ 부호화 문항은 모든 레벨에서 일부러 쉽다(errorless learning). 오답을 생성하면 그 오답이 함께 학습되기 때문. 레벨은 인출 난이도만 바꾼다.",
+    "★ 부호화 항목은 레벨 독립이다 — 레벨은 /complete에서 바뀌므로 부호화일과 인출일 사이에 달라질 수 있다. 항목이 레벨마다 다르면 짝이 어긋난다.",
+    "레벨 2는 범주 단서를 프롬프트에 주고, 레벨 3은 그 단서를 뺀다 (vanishing cues).",
+    "인출 문항의 오답 보기는 전부 같은 범주다 — 범주가 섞이면 단서만으로 정답이 찍힌다.",
+    "★ 부호화 문항의 오답 보기에 인출용 보기(개나리·국화 등)를 절대 넣지 않았다 — 넣으면 간섭이 생겨 인출이 오염된다.",
+    "★ 부호화 보기는 '다른 항목'의 인출 오답과도 겹치면 안 된다 — day1 레벨3에 '항아리'를 썼다가 그것이 day4(주전자) 인출 오답이라 간섭이 생기는 걸 실제 화면에서 발견해 '거울'로 바꿨다. 검증기도 항목 간 간섭을 보도록 고쳤다.",
+    "미션은 day1·day3에서 되뇌기(rehearsal)로 쓴다. PRD §3.1 ⑤의 '생활 실천' 정의에서 벗어나는 사용이라 문서에 남긴다.",
+    "id는 [주차][일][2][레벨] 체계 (워밍업은 [주차]11[레벨]). week1~4와 겹치지 않는다."
+  ]
+}
