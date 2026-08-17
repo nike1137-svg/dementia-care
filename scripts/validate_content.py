@@ -57,6 +57,20 @@ def check_structure(data: dict, name: str, errs: list[str]) -> list[int]:
                 if bad in q.get("prompt", ""):
                     errs.append(f"{qid}: 금지 문구 '{bad}' (PRD §3.4)")
 
+            # 단계적 촉구 단서는 범주·속성만 준다. 정답이 들어가면 PRD §3.4 위반이다.
+            hint = q.get("hint_after_wrong")
+            if hint is not None:
+                if not hint.strip():
+                    errs.append(f"{qid}: hint_after_wrong가 비어 있다")
+                if q.get("answer") and q["answer"] in hint:
+                    errs.append(
+                        f"{qid}: 단서에 정답 {q['answer']!r}이 들어 있다 — "
+                        f"정답을 알려주면 안 된다 (PRD §3.4)"
+                    )
+                for bad in FORBIDDEN:
+                    if bad in hint:
+                        errs.append(f"{qid}: 단서에 금지 문구 '{bad}' (PRD §3.4)")
+
             choices = q.get("choices")
             if q["answer_type"] == "static":
                 if not choices:

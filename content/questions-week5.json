@@ -163,7 +163,8 @@
           ],
           "answer_type": "static",
           "answer": "진달래",
-          "srt_role": "retrieve"
+          "srt_role": "retrieve",
+          "hint_after_wrong": "봄에 산에 피는 꽃이었어요"
         },
         "2": {
           "id": 5222,
@@ -176,7 +177,8 @@
           ],
           "answer_type": "static",
           "answer": "진달래",
-          "srt_role": "retrieve"
+          "srt_role": "retrieve",
+          "hint_after_wrong": "산에 무리 지어 피고 분홍빛이었어요"
         },
         "3": {
           "id": 5223,
@@ -189,7 +191,8 @@
           ],
           "answer_type": "static",
           "answer": "진달래",
-          "srt_role": "retrieve"
+          "srt_role": "retrieve",
+          "hint_after_wrong": "봄에 피는 꽃이었어요"
         }
       },
       "recall": {
@@ -265,7 +268,8 @@
           ],
           "answer_type": "static",
           "answer": "주전자",
-          "srt_role": "retrieve"
+          "srt_role": "retrieve",
+          "hint_after_wrong": "물을 끓일 때 쓰던 것이었어요"
         },
         "2": {
           "id": 5422,
@@ -278,7 +282,8 @@
           ],
           "answer_type": "static",
           "answer": "주전자",
-          "srt_role": "retrieve"
+          "srt_role": "retrieve",
+          "hint_after_wrong": "주둥이가 길고 손잡이가 달렸어요"
         },
         "3": {
           "id": 5423,
@@ -291,7 +296,8 @@
           ],
           "answer_type": "static",
           "answer": "주전자",
-          "srt_role": "retrieve"
+          "srt_role": "retrieve",
+          "hint_after_wrong": "부엌에서 물을 끓이던 것이었어요"
         }
       },
       "recall": {
@@ -316,7 +322,8 @@
           ],
           "answer_type": "static",
           "answer": "진달래",
-          "srt_role": "retrieve"
+          "srt_role": "retrieve",
+          "hint_after_wrong": "봄에 산에 피는 꽃이었어요"
         },
         "2": {
           "id": 5522,
@@ -329,7 +336,8 @@
           ],
           "answer_type": "static",
           "answer": "진달래",
-          "srt_role": "retrieve"
+          "srt_role": "retrieve",
+          "hint_after_wrong": "산에 무리 지어 피고 분홍빛이었어요"
         },
         "3": {
           "id": 5523,
@@ -342,7 +350,8 @@
           ],
           "answer_type": "static",
           "answer": "진달래",
-          "srt_role": "retrieve"
+          "srt_role": "retrieve",
+          "hint_after_wrong": "봄에 피는 꽃이었어요"
         }
       },
       "recall": {
@@ -365,6 +374,7 @@
     "★ 부호화 문항의 오답 보기에 인출용 보기(개나리·국화 등)를 절대 넣지 않았다 — 넣으면 간섭이 생겨 인출이 오염된다.",
     "★ 부호화 보기는 '다른 항목'의 인출 오답과도 겹치면 안 된다 — day1 레벨3에 '항아리'를 썼다가 그것이 day4(주전자) 인출 오답이라 간섭이 생기는 걸 실제 화면에서 발견해 '거울'로 바꿨다. 검증기도 항목 간 간섭을 보도록 고쳤다.",
     "미션은 day1·day3에서 되뇌기(rehearsal)로 쓴다. PRD §3.1 ⑤의 '생활 실천' 정의에서 벗어나는 사용이라 문서에 남긴다.",
-    "id는 [주차][일][2][레벨] 체계 (워밍업은 [주차]11[레벨]). week1~4와 겹치지 않는다."
+    "id는 [주차][일][2][레벨] 체계 (워밍업은 [주차]11[레벨]). week1~4와 겹치지 않는다.",
+    "인출 문항에는 hint_after_wrong(단계적 촉구)를 둔다 — 1차 오답 시 그냥 다시 찍게 하지 않고 범주·속성 단서를 준다. errorless learning 근거는 docs/week5-memory-design.md §3-2. 단서에 정답 문자열을 넣지 않는다(검증기가 확인)."
   ]
 }

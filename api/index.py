@@ -595,10 +595,17 @@ def submit_answer(
         }
 
     # 1차 오답 → 재시도 대기. 최종 결과가 아니므로 연속 성공/실패에 반영하지 않는다.
+    #
+    # 문항에 hint_after_wrong가 있으면 기본 문구 대신 그 단서를 준다 (단계적 촉구).
+    # 왜: 기억력 과제(5주차~)에서 그냥 다시 찍게 하면 errorless learning 원칙에
+    # 어긋난다 — 기억 손상이 있는 사람이 오답을 생성하면 그 오답이 함께 학습된다
+    # (Wilson·Baddeley 1994, docs/week5-memory-design.md §3-2). 단서를 더 줘서
+    # 맞힐 확률을 올리는 쪽이 낫다. 단서는 범주·속성이지 정답이 아니므로 PRD §3.4
+    # "정답을 알려주지 않는다"를 위반하지 않는다 (검증기가 정답 포함 여부를 본다).
     return {
         "correct": False,
         "attempts": attempt,
-        "message": messages["wrong_first"],
+        "message": question.get("hint_after_wrong") or messages["wrong_first"],
         "next_action": "retry",
     }
 
