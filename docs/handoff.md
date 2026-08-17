@@ -18,19 +18,16 @@
 | 콘텐츠 | **12주 중 3주차까지** — `questions-week1·2.json`(지남력), `questions-week3.json`(주의·집중). 각 5일치 |
 | 서비스 | 데스크탑에서 가동 중. `care.dodami-ai.com` (Cloudflare Access 뒤) |
 | 컨테이너 | `web`·`api`·`cloudflared` 3개 모두 Up, 재시작 정책 `unless-stopped` |
-| 미배포 코드 | **있다 (아래 §1-1).** 3주차 콘텐츠 + `/history` domain 수정 + web Dockerfile 최적화 |
+| 미배포 코드 | **없다.** 3주차 콘텐츠·`/history` 수정 모두 2026-08-17 배포 완료 |
+| 실사용자 진도 | 2명, 완료 **2일·4일** (2026-08-17 확인) — 둘 다 아직 1주차 |
 
-> **§1-1. 커밋됐지만 아직 운영에 안 올라간 것 (2026-08-17 데스크탑 세션)**
->
-> | 커밋 | 내용 | 검증 상태 |
-> |---|---|---|
-> | `9910e2b` | web Dockerfile `chown -R` → `COPY --chown` (빌드 523초 단축) | **빌드 미검증** — `sudo docker compose build web` 필요 |
-> | (콘텐츠) | `content/questions-week3.json` + `/history` domain 파생 수정 | 로컬 HTTP 실측 완료. **운영 미배포** |
->
-> 배포하려면 `api` 이미지 재빌드(콘텐츠·`index.py` 변경분), Dockerfile 검증까지
-> 하려면 `web` 도 재빌드해야 한다. 명령은 §5.
+**서비스와 저장소가 일치한다.** 노트북에서 `git clone` 하면 지금 돌고 있는 것과 같은
+코드를 받는다. (2026-08-17 api 이미지 재빌드·배포 완료 기준)
 
-**저장소가 서비스보다 앞서 있다.** 위 §1-1을 배포하면 다시 일치한다.
+> **★ 3주차 콘텐츠는 배포됐지만 아직 아무도 못 봤다.** 3주차는 완료 10일차부터
+> 시작하는데(`week = N//5+1`) 최다 진도가 4일이다. 운영에서 주의·집중 문항이 실제로
+> 나오는 것은 **아직 확인할 수 없다** — 로컬 실측으로만 검증했다(§6-3). 가장 빠른
+> 유저가 6일 더 채우면 그때 확인할 것.
 
 ## 2. 직전에 무슨 일이 있었나 — 반드시 읽을 것
 
@@ -91,11 +88,14 @@ cd ~/projects/dementia-care && git pull && sudo docker compose build web && sudo
 
 ## 6. 다음 할 일
 
-1. **web Dockerfile `RUN chown -R 1000:1000 /app` 개선 — 2026-08-17 코드 수정 완료
-   (커밋 `9910e2b`), 빌드 검증 대기.** `COPY --chown=1000:1000` 으로 옮겼다. 빌드
-   646초 중 523초를 쓰던 줄이라 120초 안팎을 기대한다. **아직 실제로 빌드해보지
-   않았다** — `sudo docker compose build web` 이 통과하는지, 시간이 실제로 줄었는지
-   확인이 남았다. 컨테이너는 `read_only:true` 에 `/app/.next/cache` 만 tmpfs 라
+1. **web Dockerfile `RUN chown -R 1000:1000 /app` 개선 — 2026-08-17 완료, 단
+   시간 단축은 미검증.** `COPY --chown=1000:1000` 으로 옮겼다(커밋 `9910e2b`).
+   `sudo docker compose build web` 통과 확인(5.17초). **이 5초는 개선 효과의 증거가
+   아니다** — 캐시가 대부분 재사용된 빌드라 비싼 단계(`npm ci`·`next build`)를 건너뛴
+   것이고, 기존 646초는 캐시 없는 전체 빌드였다. 확인된 것은 "`COPY --from=... --chown=`
+   문법이 유효하고 빌드가 깨지지 않는다"까지다(Dockerfile을 바꿔 캐시가 깨졌으므로 그
+   COPY 줄들은 반드시 재실행됐다). **523초 절감을 실제로 재려면 `build --no-cache web`
+   이 필요하다.** 컨테이너는 `read_only:true` 에 `/app/.next/cache` 만 tmpfs 라
    `/app` 에 쓰기 경로가 없어 소유권이 실행에 영향을 주지 않는다(확인함).
    `api/Dockerfile` 의 같은 `chown` 은 **건드리지 않았다** — DB 볼륨 권한 때문에
    의도적으로 넣은 것이고(커밋 `d42541f`) api 재빌드는 43초라 문제가 아니다.
@@ -119,7 +119,8 @@ cd ~/projects/dementia-care && git pull && sudo docker compose build web && sudo
      각각 N=3·2 — 둘 다 week1 내(day4·day3)라 주차 점프 없음. `api` 이미지만
      재빌드(43초)해 반영했고, 실제 서비스에서 워밍업 통과·day4 문항·day4 미션
      문구("가족한테 안부 한마디 남겨보세요")·streak 2일을 확인했다.
-3. **3주차 콘텐츠 — 2026-08-17 완료 (운영 미배포).** `content/questions-week3.json`
+3. **3주차 콘텐츠 — 2026-08-17 완료·배포됨 (운영 실측은 불가, 위 §1 참조).**
+   `content/questions-week3.json`
    (주의·집중, 5일치 × 3레벨). main 문항을 전부 `static` 으로 짜서 **문항 관련 서버
    코드는 한 줄도 안 바뀌었다.** 다만 3주차가 **처음으로 영역을 바꾸는 주차**라
    `/history` 의 `domain` 하드코딩이 드러나 같이 고쳤다 (`domains_by_date`, DB 스키마

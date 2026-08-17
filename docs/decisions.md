@@ -172,3 +172,30 @@ day1 미션이었던 버그도 같이 해소됨), 레벨 1/2/3 각각의 warmup�
 
 **미조치.** 4주차(`questions-week4.json`) 미작성 — 없으면 3주차가 반복된다(의도된
 fallback). PRD §3.2대로 4주차도 주의·집중이라 반복이 치명적이진 않다.
+
+
+## 2026-08-17 — 3주차 배포 + "빌드 5초"를 개선 효과로 읽지 않기
+
+**배포.** `api` 이미지만 재빌드(4.6초)해 교체했다. `docker compose up -d --no-deps api`
+출력이 `Container ... Running` 이라 **교체가 안 된 줄 알고 걱정했으나**, 컨테이너
+안을 직접 확인하니 새 코드가 들어 있었다:
+
+```
+$ sudo docker compose exec -T api sh -c 'ls /app/content/ && grep -c domains_by_date /app/api/index.py'
+questions-week1.json / questions-week2.json / questions-week3.json / 2
+```
+
+교훈: compose의 상태 표시 문구로 배포 성공을 판정하지 말 것. **컨테이너 안을 보면
+확실하다.**
+
+**운영 진도.** `daily_completions` 집계 결과 유저 2명이 완료 2일·4일. `week=N//5+1`
+이라 둘 다 1주차다. 따라서 이번 배포로 **사용자가 체감할 변화는 없다** — 3주차
+문항은 10일차부터 나오고, `/history` 의 domain도 1주차면 파생 결과가 '지남력'으로
+이전 하드코딩 값과 같다. 의도한 대로 조용한 배포다.
+
+**web 빌드 5.17초를 개선 효과로 읽으면 안 된다.** `chown -R` 제거 후 첫 빌드가
+5.17초로 끝났지만 이건 캐시가 대부분 재사용된 빌드다 — 비싼 `npm ci`·`next build`가
+캐시에서 나왔고, 비교 대상인 646초는 캐시 없는 전체 빌드였다. **이 빌드로 증명된
+것은 "문법이 유효하고 빌드가 깨지지 않는다"까지다** (Dockerfile을 고쳐 캐시가
+깨졌으므로 바뀐 COPY 줄들은 반드시 재실행됐다). 523초 절감은 `build --no-cache web`
+으로 재기 전까지 **미검증**으로 둔다.
