@@ -7,10 +7,15 @@ Phase 4-b: 연결·스키마 생성 + users 테이블만 실사용.
   (SQL 인젝션 방지 — 절대 규칙).
 """
 
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "data" / "dementia.db"
+# 기본값은 예전과 같다. 컨테이너는 이 환경변수를 설정하지 않으므로 운영 동작은 그대로다.
+# DEMENTIA_DB_PATH는 로컬 데모/검증용 — 운영 DB를 건드리지 않고 별도 파일로 띄우기 위한
+# 통로다 (scripts/demo.sh, scripts/demo_jump.py 참조).
+_DEFAULT_DB_PATH = Path(__file__).resolve().parent / "data" / "dementia.db"
+DB_PATH = Path(os.environ.get("DEMENTIA_DB_PATH") or _DEFAULT_DB_PATH)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
