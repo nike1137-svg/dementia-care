@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from "./session.module.css";
 import { useFetch } from "../lib/useFetch";
 import { AsyncBoundary } from "../components/AsyncBoundary";
-import { getOrCreateUserId } from "../lib/userId";
+import { fetchAsUser } from "../lib/userId";
 
 const SESSION_URL = "/api/py/session/today";
 
@@ -47,8 +47,7 @@ type CompleteResponse = {
 };
 
 async function loadSession(): Promise<Session> {
-  const userId = await getOrCreateUserId();
-  const res = await fetch(SESSION_URL, { headers: { "X-User-Id": userId } });
+  const res = await fetchAsUser(SESSION_URL);
   if (!res.ok) throw new Error(`session ${res.status}`);
   return (await res.json()) as Session;
 }
@@ -58,10 +57,9 @@ async function submitAnswer(
   questionId: number,
   response: string,
 ): Promise<AnswerResponse> {
-  const userId = await getOrCreateUserId();
-  const res = await fetch(`/api/py/session/${sessionId}/answer`, {
+  const res = await fetchAsUser(`/api/py/session/${sessionId}/answer`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-User-Id": userId },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question_id: questionId, response }),
   });
   if (!res.ok) throw new Error(`answer ${res.status}`);
@@ -83,10 +81,9 @@ async function submitComplete(
   sessionId: number,
   mood: string | null,
 ): Promise<CompleteResponse> {
-  const userId = await getOrCreateUserId();
-  const res = await fetch(`/api/py/session/${sessionId}/complete`, {
+  const res = await fetchAsUser(`/api/py/session/${sessionId}/complete`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-User-Id": userId },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ mood }),
   });
   if (!res.ok) {

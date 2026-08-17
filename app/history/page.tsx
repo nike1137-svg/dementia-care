@@ -3,7 +3,7 @@
 import styles from "./history.module.css";
 import { useFetch } from "../lib/useFetch";
 import { AsyncBoundary } from "../components/AsyncBoundary";
-import { getOrCreateUserId } from "../lib/userId";
+import { fetchAsUser } from "../lib/userId";
 
 const HISTORY_URL = "/api/py/history";
 
@@ -12,8 +12,7 @@ type Day = { date: string; completed: boolean; domain: string | null };
 type History = { days: Day[] };
 
 async function loadHistory(): Promise<History> {
-  const userId = await getOrCreateUserId();
-  const res = await fetch(HISTORY_URL, { headers: { "X-User-Id": userId } });
+  const res = await fetchAsUser(HISTORY_URL);
   if (!res.ok) throw new Error(`history ${res.status}`);
   return (await res.json()) as History;
 }
