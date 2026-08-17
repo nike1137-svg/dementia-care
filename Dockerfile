@@ -38,14 +38,18 @@ ENV NODE_ENV=production
 # §8-4) — 새로 만들지 않고 그대로 쓴다. groupadd/useradd를 다시 시도하면
 # gid/uid 1000이 이미 있어 "already exists"로 빌드가 실패한다(exit 4).
 # 홈 디렉터리도 base 이미지가 만들 때 이미 /home/node로 준비돼 있다.
+#
+# 소유권은 COPY --chown 으로 복사 시점에 준다. 예전엔 COPY 뒤에
+# `RUN chown -R 1000:1000 /app` 을 뒀는데, chown은 건드린 파일을 전부 새 레이어로
+# 복제하므로 node_modules(444M)+.next(224M) 때문에 빌드 646초 중 523초를 혼자
+# 썼다. --chown은 복사하면서 소유권을 정하니 추가 레이어가 없다. 결과 이미지는
+# 동일하다.
+COPY --from=deps --chown=1000:1000 /app/node_modules ./node_modules
+COPY --from=builder --chown=1000:1000 /app/public ./public
+COPY --from=builder --chown=1000:1000 /app/.next ./.next
+COPY --from=builder --chown=1000:1000 /app/package.json ./package.json
+COPY --from=builder --chown=1000:1000 /app/next.config.ts ./next.config.ts
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/next.config.ts ./next.config.ts
-
-RUN chown -R 1000:1000 /app
 USER 1000:1000
 
 EXPOSE 3000
